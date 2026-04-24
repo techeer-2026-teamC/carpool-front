@@ -1,11 +1,12 @@
 import React, { useState } from 'react'
 import { ALL_TAGS } from '../data/tags'
+import { LOCATION_COORDS } from '../data/mockData'
 
 export default function PostModal({ onClose, onSubmit }) {
   const today = new Date().toISOString().split('T')[0]
   const [form, setForm] = useState({
     from: '', to: '', date: today, time: '',
-    seats: '2', price: '', nickname: '', desc: '',
+    seats: '2', price: '', desc: '',
   })
   const [selectedTags, setSelectedTags] = useState(new Set())
   const [error, setError] = useState('')
@@ -24,12 +25,22 @@ export default function PostModal({ onClose, onSubmit }) {
   }
 
   function handleSubmit() {
-    if (!form.from || !form.to || !form.date || !form.time || !form.nickname) {
+    if (!form.from || !form.to || !form.date || !form.time) {
       setError('필수 항목을 모두 입력해주세요.')
       return
     }
     setError('')
-    onSubmit({ ...form, seats: Number(form.seats), tags: [...selectedTags] })
+    const fromCoords = LOCATION_COORDS[form.from] || null
+    const toCoords = LOCATION_COORDS[form.to] || null
+    onSubmit({
+      ...form,
+      seats: Number(form.seats),
+      tags: [...selectedTags],
+      departureLat: fromCoords ? fromCoords[0] : null,
+      departureLng: fromCoords ? fromCoords[1] : null,
+      destinationLat: toCoords ? toCoords[0] : null,
+      destinationLng: toCoords ? toCoords[1] : null,
+    })
     onClose()
   }
 
@@ -76,10 +87,6 @@ export default function PostModal({ onClose, onSubmit }) {
             <input style={styles.input} type="number" value={form.price} onChange={e => set('price', e.target.value)} placeholder="예: 5000" />
           </FormGroup>
         </div>
-
-        <FormGroup label="닉네임 *">
-          <input style={styles.input} value={form.nickname} onChange={e => set('nickname', e.target.value)} placeholder="닉네임을 입력하세요" />
-        </FormGroup>
 
         <FormGroup label="추가 안내">
           <textarea style={{ ...styles.input, resize: 'vertical', minHeight: 76 }} value={form.desc} onChange={e => set('desc', e.target.value)} placeholder="경유지, 주의사항 등 자유롭게 적어주세요" />

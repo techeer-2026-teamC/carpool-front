@@ -1,13 +1,38 @@
-import { useState, useMemo, useCallback } from 'react'
-import { generateMockPosts } from '../data/mockData'
+import { useState, useEffect, useMemo, useCallback } from 'react'
+import { fetchPosts, createPost as apiCreatePost, removePost as apiRemovePost } from '../api/posts'
 
-function genId() {
-  return Date.now().toString(36) + Math.random().toString(36).slice(2)
-}
 const COLORS = ['#6b7c3f', '#8a9e50', '#4a5a2a', '#a0845c', '#7a9a6b', '#5c7a4a']
 
-export function useCarpool() {
-  const [posts, setPosts] = useState(() => generateMockPosts())
+function normalizePost(post, memberId) {
+  const dt = post.departureTime || ''
+  return {
+    id: post.id,
+    from: post.departureLocation,
+    to: post.destinationLocation,
+    date: dt.split('T')[0] || '',
+    time: (dt.split('T')[1] || '').slice(0, 5),
+    seats: post.maxPassengers,
+    filled: post.currentPassengers,
+    price: '',
+    nickname: '익명',
+    desc: post.description || '',
+    color: COLORS[post.id % COLORS.length],
+    rating: '5.0',
+    trips: 0,
+    isMe: post.memberId === memberId,
+    memberId: post.memberId,
+    status: post.status,
+    tags: [],
+    departureLat: post.departureLat ?? null,
+    departureLng: post.departureLng ?? null,
+    destinationLat: post.destinationLat ?? null,
+    destinationLng: post.destinationLng ?? null,
+  }
+}
+
+export function useCarpool(memberId) {
+  const [posts, setPosts] = useState([])
+  const [loading, setLoading] = useState(true)
   const [currentPage, setCurrentPage] = useState('list')
   const [currentView, setCurrentView] = useState('card')
   const [currentFilter, setCurrentFilter] = useState('all')
@@ -19,6 +44,22 @@ export function useCarpool() {
     setToast(msg)
     setTimeout(() => setToast(''), 2500)
   }, [])
+
+  const loadPosts = useCallback(async () => {
+    try {
+      setLoading(true)
+      const data = await fetchPosts()
+      setPosts(data.map(p => normalizePost(p, memberId)))
+    } catch {
+      showToast('게시글을 불러오지 못했습니다.')
+    } finally {
+      setLoading(false)
+    }
+  }, [memberId, showToast])
+
+  useEffect(() => {
+    loadPosts()
+  }, [loadPosts])
 
   const filteredPosts = useMemo(() => {
     const today = new Date().toISOString().split('T')[0]
@@ -46,40 +87,54 @@ export function useCarpool() {
     })
   }, [])
 
-  const clearTagFilters = useCallback(() => {
-    setSelectedTagFilters(new Set())
-  }, [])
+  const clearTagFilters = useCallback(() => setSelectedTagFilters(new Set()), [])
 
-  const addPost = useCallback((data) => {
-    const newPost = {
-      id: genId(),
-      ...data,
-      filled: 0,
-      color: COLORS[Math.floor(Math.random() * COLORS.length)],
-      rating: '5.0',
-      trips: 1,
-      isMe: true,
+  const addPost = useCallback(async (form) => {
+    try {
+      const created = await apiCreatePost({
+        memberId,
+        title: `${form.from} → ${form.to}`,
+        departureLocation: form.from,
+        destinationLocation: form.to,
+        departureLat: form.departureLat ?? null,
+        departureLng: form.departureLng ?? null,
+        destinationLat: form.destinationLat ?? null,
+        destinationLng: form.destinationLng ?? null,
+        departureTime: `${form.date}T${form.time}:00`,
+        maxPassengers: Number(form.seats),
+        description: form.desc || '',
+        autoAccept: true,
+      })
+      setPosts(prev => [normalizePost(created, memberId), ...prev])
+      showToast('게시글이 등록되었습니다!')
+    } catch {
+      showToast('게시글 등록에 실패했습니다.')
     }
-    setPosts(prev => [newPost, ...prev])
-    showToast('🚗 게시글이 등록되었습니다!')
+  }, [memberId, showToast])
+
+  const deletePost = useCallback(async (id) => {
+    try {
+      await apiRemovePost(id)
+      setPosts(prev => prev.filter(p => p.id !== id))
+      showToast('게시글이 삭제되었습니다')
+    } catch {
+      showToast('삭제에 실패했습니다.')
+    }
   }, [showToast])
 
-  const deletePost = useCallback((id) => {
-    setPosts(prev => prev.filter(p => p.id !== id))
-    showToast('🗑️ 게시글이 삭제되었습니다')
-  }, [showToast])
-
+  // ride API 미완성 — 낙관적 업데이트만
   const joinCarpool = useCallback((id) => {
     setPosts(prev => prev.map(p =>
       p.id === id ? { ...p, filled: Math.min(p.filled + 1, p.seats) } : p
     ))
-    showToast('✅ 참여 신청이 완료되었습니다!')
+    showToast('참여 신청이 완료되었습니다!')
   }, [showToast])
 
   return {
     posts,
     filteredPosts,
     myPosts,
+    loading,
     currentPage, setCurrentPage,
     currentView, setCurrentView,
     currentFilter, setCurrentFilter,

@@ -76,10 +76,10 @@ export default function CarpoolCard({ post, onOpen, onDelete, showDelete }) {
       <div style={styles.footer}>
         <div style={styles.userInfo}>
           <div style={{ ...styles.avatar, background: `${post.color}22`, color: post.color }}>
-            {post.nickname[0]}
+            {(post.nickname || '?')[0]}
           </div>
           <div>
-            <div style={styles.userName}>{post.nickname}</div>
+            <div style={styles.userName}>{post.nickname || '익명'}</div>
             <div style={styles.rating}>★ {post.rating} · {post.trips}회</div>
           </div>
         </div>

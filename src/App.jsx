@@ -7,14 +7,45 @@ import CarpoolCard from './components/CarpoolCard'
 import MapView from './components/MapView'
 import PostModal from './components/PostModal'
 import DetailModal from './components/DetailModal'
+import ProfilePage from './components/ProfilePage'
+import RidePage from './components/RidePage'
 import Toast from './components/Toast'
 import { useCarpool } from './hooks/useCarpool'
 
+function parseMemberId(token) {
+  try {
+    return JSON.parse(atob(token.split('.')[1])).memberId
+  } catch {
+    return null
+  }
+}
+
+function getInitialAuth() {
+  const token = localStorage.getItem('accessToken')
+  if (!token) return { token: null, memberId: null }
+  const memberId = parseMemberId(token)
+  return memberId ? { token, memberId } : { token: null, memberId: null }
+}
+
 export default function App() {
+  const [auth, setAuth] = useState(getInitialAuth)
+
+  function handleLogin(token) {
+    const memberId = parseMemberId(token)
+    localStorage.setItem('accessToken', token)
+    setAuth({ token, memberId })
+  }
+
+  function handleLogout() {
+    localStorage.removeItem('accessToken')
+    setAuth({ token: null, memberId: null })
+  }
+
   const {
     posts,
     filteredPosts,
     myPosts,
+    loading,
     currentPage, setCurrentPage,
     currentView, setCurrentView,
     currentFilter, setCurrentFilter,
@@ -26,9 +57,8 @@ export default function App() {
     addPost,
     deletePost,
     joinCarpool,
-  } = useCarpool()
+  } = useCarpool(auth.memberId)
 
-  const [isLoggedIn, setIsLoggedIn] = useState(false)
   const [showPostModal, setShowPostModal] = useState(false)
   const [selectedPostId, setSelectedPostId] = useState(null)
 
@@ -43,8 +73,8 @@ export default function App() {
     setSelectedPostId(null)
   }
 
-  if (!isLoggedIn) {
-    return <LoginPage onLogin={() => setIsLoggedIn(true)} />
+  if (!auth.token) {
+    return <LoginPage onLogin={handleLogin} />
   }
 
   return (
@@ -53,6 +83,7 @@ export default function App() {
         currentPage={currentPage}
         onPageChange={setCurrentPage}
         onOpenPost={() => setShowPostModal(true)}
+        onLogout={handleLogout}
       />
 
       {currentPage === 'list' && (
@@ -60,16 +91,16 @@ export default function App() {
       )}
 
       <div style={styles.main}>
-        {/* 검색 + 태그 필터 */}
-        <SearchSection
-          onSearch={setSearchQuery}
-          onClear={() => setSearchQuery({ from: '', to: '', date: '' })}
-          selectedTagFilters={selectedTagFilters}
-          onToggleTag={toggleTagFilter}
-          onClearTags={clearTagFilters}
-        />
+        {(currentPage === 'list' || currentPage === 'my') && (
+          <SearchSection
+            onSearch={setSearchQuery}
+            onClear={() => setSearchQuery({ from: '', to: '', date: '' })}
+            selectedTagFilters={selectedTagFilters}
+            onToggleTag={toggleTagFilter}
+            onClearTags={clearTagFilters}
+          />
+        )}
 
-        {/* 카풀 목록 페이지 */}
         {currentPage === 'list' && (
           <>
             <div style={styles.toolbar}>
@@ -116,7 +147,12 @@ export default function App() {
               </div>
             </div>
 
-            {currentView === 'card' && (
+            {loading ? (
+              <div style={styles.emptyState}>
+                <div style={{ fontSize: '2.5rem', marginBottom: '1rem', opacity: 0.4 }}>🚗</div>
+                <p>불러오는 중...</p>
+              </div>
+            ) : currentView === 'card' ? (
               <div style={styles.cardsGrid}>
                 {filteredPosts.length === 0 ? (
                   <div style={styles.emptyState}>
@@ -129,15 +165,12 @@ export default function App() {
                   ))
                 )}
               </div>
-            )}
-
-            {currentView === 'map' && (
+            ) : (
               <MapView posts={filteredPosts} onOpenDetail={handleOpenDetail} />
             )}
           </>
         )}
 
-        {/* 내 카풀 페이지 */}
         {currentPage === 'my' && (
           <>
             <div style={styles.toolbar}>
@@ -166,9 +199,16 @@ export default function App() {
             </div>
           </>
         )}
+
+        {currentPage === 'profile' && (
+          <ProfilePage memberId={auth.memberId} />
+        )}
+
+        {currentPage === 'rides' && (
+          <RidePage memberId={auth.memberId} />
+        )}
       </div>
 
-      {/* 모달 */}
       {showPostModal && (
         <PostModal
           onClose={() => setShowPostModal(false)}

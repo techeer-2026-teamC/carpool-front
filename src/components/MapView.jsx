@@ -31,11 +31,13 @@ export default function MapView({ posts, onOpenDetail }) {
     })
 
     Object.entries(byFrom).forEach(([loc, ps]) => {
-      const coords = LOCATION_COORDS[loc]
-      if (!coords) return
       ps.forEach((p, idx) => {
+        const baseCoords = (p.departureLat != null && p.departureLng != null)
+          ? [p.departureLat, p.departureLng]
+          : LOCATION_COORDS[loc]
+        if (!baseCoords) return
         const offset = idx * 0.0025
-        const latlng = [coords[0] + offset, coords[1] + offset]
+        const latlng = [baseCoords[0] + offset, baseCoords[1] + offset]
         const avail = p.seats - p.filled
         const full = avail <= 0
         const col = full ? '#c0392b' : p.color
@@ -84,7 +86,9 @@ export default function MapView({ posts, onOpenDetail }) {
     posts.forEach(p => {
       if (toSeen.has(p.to)) return
       toSeen.add(p.to)
-      const c = LOCATION_COORDS[p.to]
+      const c = (p.destinationLat != null && p.destinationLng != null)
+        ? [p.destinationLat, p.destinationLng]
+        : LOCATION_COORDS[p.to]
       if (!c) return
       const icon = L.divIcon({
         className: '',

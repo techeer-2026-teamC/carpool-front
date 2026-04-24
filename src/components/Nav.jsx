@@ -1,26 +1,33 @@
 import React from 'react'
 
-export default function Nav({ currentPage, onPageChange, onOpenPost }) {
+const NAV_TABS = [
+  { key: 'list',    label: '카풀 찾기' },
+  { key: 'my',      label: '내 카풀' },
+  { key: 'rides',   label: '내 운행' },
+  { key: 'profile', label: '프로필' },
+]
+
+export default function Nav({ currentPage, onPageChange, onOpenPost, onLogout }) {
   return (
     <nav style={styles.nav}>
       <div style={styles.logo}>
         같이<span style={{ color: 'var(--text)' }}>타</span>
       </div>
       <div style={styles.navLinks}>
-        <button
-          style={{ ...styles.navTab, ...(currentPage === 'list' ? styles.navTabActive : {}) }}
-          onClick={() => onPageChange('list')}
-        >
-          카풀 찾기
-        </button>
-        <button
-          style={{ ...styles.navTab, ...(currentPage === 'my' ? styles.navTabActive : {}) }}
-          onClick={() => onPageChange('my')}
-        >
-          내 카풀
-        </button>
+        {NAV_TABS.map(t => (
+          <button
+            key={t.key}
+            style={{ ...styles.navTab, ...(currentPage === t.key ? styles.navTabActive : {}) }}
+            onClick={() => onPageChange(t.key)}
+          >
+            {t.label}
+          </button>
+        ))}
         <button style={styles.btnPrimary} onClick={onOpenPost}>
           + 게시글 등록
+        </button>
+        <button style={styles.btnLogout} onClick={onLogout}>
+          로그아웃
         </button>
       </div>
     </nav>
@@ -40,6 +47,8 @@ const styles = {
     alignItems: 'center',
     justifyContent: 'space-between',
     height: 64,
+    flexWrap: 'wrap',
+    gap: '0.5rem',
   },
   logo: {
     fontFamily: "'Space Mono', monospace",
@@ -50,7 +59,7 @@ const styles = {
   },
   navLinks: {
     display: 'flex',
-    gap: '0.5rem',
+    gap: '0.3rem',
     alignItems: 'center',
   },
   navTab: {
@@ -58,14 +67,15 @@ const styles = {
     border: 'none',
     cursor: 'pointer',
     color: 'var(--text-muted)',
-    fontSize: '0.9rem',
-    padding: '0.5rem 1rem',
+    fontSize: '0.88rem',
+    padding: '0.45rem 0.85rem',
     borderRadius: 8,
     transition: 'all 0.2s',
   },
   navTabActive: {
     background: 'var(--accent-pale)',
     color: 'var(--accent)',
+    fontWeight: 600,
   },
   btnPrimary: {
     background: 'var(--accent)',
@@ -73,8 +83,19 @@ const styles = {
     border: 'none',
     cursor: 'pointer',
     fontWeight: 700,
-    fontSize: '0.9rem',
-    padding: '0.55rem 1.2rem',
+    fontSize: '0.88rem',
+    padding: '0.5rem 1.1rem',
+    borderRadius: 8,
+    transition: 'all 0.2s',
+    marginLeft: '0.4rem',
+  },
+  btnLogout: {
+    background: 'none',
+    border: '1px solid var(--border)',
+    cursor: 'pointer',
+    color: 'var(--text-muted)',
+    fontSize: '0.82rem',
+    padding: '0.42rem 0.8rem',
     borderRadius: 8,
     transition: 'all 0.2s',
   },
