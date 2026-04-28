@@ -13,8 +13,8 @@ function normalizePost(post, memberId) {
     time: (dt.split('T')[1] || '').slice(0, 5),
     seats: post.maxPassengers,
     filled: post.currentPassengers,
-    price: '',
-    nickname: '익명',
+    price: post.price ?? '',
+    nickname: post.nickname || '익명',
     desc: post.description || '',
     color: COLORS[post.id % COLORS.length],
     rating: '5.0',
@@ -22,7 +22,7 @@ function normalizePost(post, memberId) {
     isMe: post.memberId === memberId,
     memberId: post.memberId,
     status: post.status,
-    tags: [],
+    tags: post.tags ?? [],
     departureLat: post.departureLat ?? null,
     departureLng: post.departureLng ?? null,
     destinationLat: post.destinationLat ?? null,
@@ -92,7 +92,6 @@ export function useCarpool(memberId) {
   const addPost = useCallback(async (form) => {
     try {
       const created = await apiCreatePost({
-        memberId,
         title: `${form.from} → ${form.to}`,
         departureLocation: form.from,
         destinationLocation: form.to,

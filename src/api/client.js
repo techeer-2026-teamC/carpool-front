@@ -4,7 +4,24 @@ function getToken() {
   return localStorage.getItem('accessToken')
 }
 
-async function request(path, options = {}) {
+function setToken(token) {
+  localStorage.setItem('accessToken', token)
+}
+
+function clearToken() {
+  localStorage.removeItem('accessToken')
+}
+
+let isRefreshing = false
+
+async function tryRefresh() {
+  const res = await fetch(`${BASE}/auth/refresh`, { method: 'POST' })
+  if (!res.ok) throw new Error('refresh failed')
+  const body = await res.json()
+  setToken(body.data.accessToken)
+}
+
+async function request(path, options = {}, retry = true) {
   const token = getToken()
   const headers = {
     'Content-Type': 'application/json',
@@ -12,6 +29,21 @@ async function request(path, options = {}) {
     ...options.headers,
   }
   const res = await fetch(`${BASE}${path}`, { ...options, headers })
+
+  if (res.status === 401 && retry && !isRefreshing) {
+    isRefreshing = true
+    try {
+      await tryRefresh()
+      isRefreshing = false
+      return request(path, options, false)
+    } catch {
+      isRefreshing = false
+      clearToken()
+      window.location.reload()
+      return
+    }
+  }
+
   if (!res.ok) {
     const body = await res.json().catch(() => ({}))
     const err = new Error(body.message || `HTTP ${res.status}`)
