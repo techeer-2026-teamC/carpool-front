@@ -1,126 +1,177 @@
-import React, { useState } from 'react'
+import React, { useEffect, useState } from 'react'
+import { getMyProfile, updateProfile } from '../api/members'
 
-export default function ProfilePage({ memberId }) {
-  const [vehicleForm, setVehicleForm] = useState({
-    type: 'sedan',
-    model: '',
-    plateNumber: '',
-    color: '',
-    maxSeats: '4',
-  })
-  const [vehicleSubmitted, setVehicleSubmitted] = useState(false)
+export default function ProfilePage() {
+  const [profile, setProfile] = useState(null)
+  const [loadError, setLoadError] = useState(null)
 
-  function setField(key, val) {
-    setVehicleForm(prev => ({ ...prev, [key]: val }))
+  const [nicknameForm, setNicknameForm] = useState({ nickname: '' })
+  const [nicknameMsg, setNicknameMsg] = useState(null)
+  const [nicknameLoading, setNicknameLoading] = useState(false)
+
+  const [pwForm, setPwForm] = useState({ currentPassword: '', newPassword: '', confirm: '' })
+  const [pwMsg, setPwMsg] = useState(null)
+  const [pwLoading, setPwLoading] = useState(false)
+
+  useEffect(() => {
+    getMyProfile()
+      .then(data => {
+        setProfile(data)
+        setNicknameForm({ nickname: data.nickname })
+      })
+      .catch(() => setLoadError('프로필을 불러오지 못했습니다.'))
+  }, [])
+
+  async function handleNicknameSubmit(e) {
+    e.preventDefault()
+    const next = nicknameForm.nickname.trim()
+    if (!next) return
+    setNicknameLoading(true)
+    setNicknameMsg(null)
+    try {
+      const updated = await updateProfile({ nickname: next })
+      setProfile(updated)
+      setNicknameMsg({ ok: true, text: '닉네임이 변경되었습니다.' })
+    } catch (err) {
+      setNicknameMsg({ ok: false, text: err.message || '변경에 실패했습니다.' })
+    } finally {
+      setNicknameLoading(false)
+    }
   }
 
-  function handleVehicleSubmit() {
-    // TODO: POST /api/v1/vehicles 연동 예정
-    setVehicleSubmitted(true)
-    setTimeout(() => setVehicleSubmitted(false), 2000)
+  async function handlePasswordSubmit(e) {
+    e.preventDefault()
+    const { currentPassword, newPassword, confirm } = pwForm
+    if (!currentPassword || !newPassword) {
+      setPwMsg({ ok: false, text: '현재 비밀번호와 새 비밀번호를 입력해주세요.' })
+      return
+    }
+    if (newPassword !== confirm) {
+      setPwMsg({ ok: false, text: '새 비밀번호가 일치하지 않습니다.' })
+      return
+    }
+    if (newPassword.length < 8) {
+      setPwMsg({ ok: false, text: '비밀번호는 8자 이상이어야 합니다.' })
+      return
+    }
+    setPwLoading(true)
+    setPwMsg(null)
+    try {
+      await updateProfile({ currentPassword, newPassword })
+      setPwMsg({ ok: true, text: '비밀번호가 변경되었습니다.' })
+      setPwForm({ currentPassword: '', newPassword: '', confirm: '' })
+    } catch (err) {
+      setPwMsg({ ok: false, text: err.message || '변경에 실패했습니다.' })
+    } finally {
+      setPwLoading(false)
+    }
   }
+
+  if (loadError) {
+    return <div style={styles.errorBox}>{loadError}</div>
+  }
+
+  if (!profile) {
+    return <div style={styles.loading}>프로필 불러오는 중...</div>
+  }
+
+  const initial = profile.nickname ? profile.nickname[0].toUpperCase() : '?'
 
   return (
     <div style={styles.page}>
-      {/* 프로필 섹션 */}
+      {/* 프로필 요약 */}
       <section style={styles.card}>
         <div style={styles.cardHeader}>
           <div style={styles.dot} />
           <h2 style={styles.cardTitle}>내 프로필</h2>
-          <span style={styles.apiBadge}>API 연동 예정</span>
         </div>
         <div style={styles.profileRow}>
-          <div style={styles.avatar}>?</div>
+          <div style={styles.avatar}>{initial}</div>
           <div>
-            <div style={styles.profileName}>닉네임 (불러오는 중)</div>
-            <div style={styles.profileMeta}>회원 ID: {memberId}</div>
-            <div style={styles.profileMeta}>이메일: (프로필 API 연동 후 표시)</div>
+            <div style={styles.profileName}>{profile.nickname}</div>
+            <div style={styles.profileMeta}>{profile.email}</div>
+            <div style={styles.profileMeta}>
+              가입일: {profile.createdAt ? new Date(profile.createdAt).toLocaleDateString('ko-KR') : '-'}
+            </div>
           </div>
-        </div>
-        <div style={styles.infoBox}>
-          프로필 조회/수정 API (<code>GET/PUT /api/v1/members/{'{id}'}</code>) 개발 후 연동됩니다.
         </div>
       </section>
 
-      {/* 차량 등록 섹션 */}
+      {/* 닉네임 수정 */}
+      <section style={styles.card}>
+        <div style={styles.cardHeader}>
+          <div style={styles.dot} />
+          <h2 style={styles.cardTitle}>닉네임 변경</h2>
+        </div>
+        <form onSubmit={handleNicknameSubmit} style={styles.form}>
+          <input
+            style={styles.input}
+            placeholder="새 닉네임"
+            maxLength={50}
+            value={nicknameForm.nickname}
+            onChange={e => setNicknameForm({ nickname: e.target.value })}
+          />
+          <button style={styles.submitBtn} disabled={nicknameLoading}>
+            {nicknameLoading ? '변경 중...' : '변경하기'}
+          </button>
+        </form>
+        {nicknameMsg && (
+          <div style={{ ...styles.msg, color: nicknameMsg.ok ? 'var(--accent2, #27ae60)' : 'var(--accent3, #c0392b)' }}>
+            {nicknameMsg.text}
+          </div>
+        )}
+      </section>
+
+      {/* 비밀번호 변경 */}
+      <section style={styles.card}>
+        <div style={styles.cardHeader}>
+          <div style={styles.dot} />
+          <h2 style={styles.cardTitle}>비밀번호 변경</h2>
+        </div>
+        <form onSubmit={handlePasswordSubmit} style={styles.form}>
+          <input
+            style={styles.input}
+            type="password"
+            placeholder="현재 비밀번호"
+            value={pwForm.currentPassword}
+            onChange={e => setPwForm(f => ({ ...f, currentPassword: e.target.value }))}
+          />
+          <input
+            style={styles.input}
+            type="password"
+            placeholder="새 비밀번호 (8자 이상)"
+            value={pwForm.newPassword}
+            onChange={e => setPwForm(f => ({ ...f, newPassword: e.target.value }))}
+          />
+          <input
+            style={styles.input}
+            type="password"
+            placeholder="새 비밀번호 확인"
+            value={pwForm.confirm}
+            onChange={e => setPwForm(f => ({ ...f, confirm: e.target.value }))}
+          />
+          <button style={styles.submitBtn} disabled={pwLoading}>
+            {pwLoading ? '변경 중...' : '비밀번호 변경'}
+          </button>
+        </form>
+        {pwMsg && (
+          <div style={{ ...styles.msg, color: pwMsg.ok ? 'var(--accent2, #27ae60)' : 'var(--accent3, #c0392b)' }}>
+            {pwMsg.text}
+          </div>
+        )}
+      </section>
+
+      {/* 차량 등록 (준비 중) */}
       <section style={styles.card}>
         <div style={styles.cardHeader}>
           <div style={styles.dot} />
           <h2 style={styles.cardTitle}>차량 등록 (드라이버 등록)</h2>
-          <span style={styles.apiBadge}>API 연동 예정</span>
+          <span style={styles.badge}>준비 중</span>
         </div>
-        <p style={styles.desc}>차량을 등록하면 카풀 게시글을 작성할 수 있습니다.</p>
-
-        <div style={styles.formGrid}>
-          <FormGroup label="차종">
-            <select style={styles.input} value={vehicleForm.type} onChange={e => setField('type', e.target.value)}>
-              <option value="sedan">승용차</option>
-              <option value="suv">SUV</option>
-              <option value="van">밴/미니밴</option>
-            </select>
-          </FormGroup>
-          <FormGroup label="차량 모델">
-            <input
-              style={styles.input}
-              placeholder="예: 현대 아반떼"
-              value={vehicleForm.model}
-              onChange={e => setField('model', e.target.value)}
-            />
-          </FormGroup>
-          <FormGroup label="차량 번호">
-            <input
-              style={styles.input}
-              placeholder="예: 12가 3456"
-              value={vehicleForm.plateNumber}
-              onChange={e => setField('plateNumber', e.target.value)}
-            />
-          </FormGroup>
-          <FormGroup label="색상">
-            <input
-              style={styles.input}
-              placeholder="예: 흰색"
-              value={vehicleForm.color}
-              onChange={e => setField('color', e.target.value)}
-            />
-          </FormGroup>
-          <FormGroup label="최대 탑승 인원">
-            <select style={styles.input} value={vehicleForm.maxSeats} onChange={e => setField('maxSeats', e.target.value)}>
-              {['2', '3', '4', '5', '6', '7'].map(n => (
-                <option key={n} value={n}>{n}명</option>
-              ))}
-            </select>
-          </FormGroup>
-        </div>
-
-        <button
-          style={{ ...styles.submitBtn, opacity: 0.6, cursor: 'not-allowed' }}
-          onClick={handleVehicleSubmit}
-          disabled
-          title="차량 등록 API 개발 후 활성화"
-        >
-          {vehicleSubmitted ? '등록 완료!' : '차량 등록하기 (준비 중)'}
-        </button>
         <div style={styles.infoBox}>
           차량 등록 API (<code>POST /api/v1/vehicles</code>) 개발 후 활성화됩니다.
         </div>
       </section>
-    </div>
-  )
-}
-
-function FormGroup({ label, children }) {
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
-      <label style={{
-        fontSize: '0.75rem',
-        fontWeight: 600,
-        color: 'var(--text-muted)',
-        textTransform: 'uppercase',
-        letterSpacing: '0.5px',
-      }}>
-        {label}
-      </label>
-      {children}
     </div>
   )
 }
@@ -157,7 +208,7 @@ const styles = {
     color: 'var(--text)',
     margin: 0,
   },
-  apiBadge: {
+  badge: {
     fontSize: '0.68rem',
     fontWeight: 600,
     padding: '0.15rem 0.5rem',
@@ -170,7 +221,6 @@ const styles = {
     display: 'flex',
     alignItems: 'center',
     gap: '1rem',
-    marginBottom: '1rem',
   },
   avatar: {
     width: 56,
@@ -196,16 +246,10 @@ const styles = {
     color: 'var(--text-muted)',
     marginBottom: '0.15rem',
   },
-  desc: {
-    fontSize: '0.87rem',
-    color: 'var(--text-muted)',
-    marginBottom: '1.2rem',
-  },
-  formGrid: {
-    display: 'grid',
-    gridTemplateColumns: '1fr 1fr',
-    gap: '0.9rem',
-    marginBottom: '1.2rem',
+  form: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '0.7rem',
   },
   input: {
     background: 'var(--surface2)',
@@ -219,7 +263,6 @@ const styles = {
     boxSizing: 'border-box',
   },
   submitBtn: {
-    width: '100%',
     background: 'var(--accent)',
     color: '#fff',
     border: 'none',
@@ -228,8 +271,12 @@ const styles = {
     fontSize: '0.95rem',
     padding: '0.8rem',
     borderRadius: 10,
-    marginBottom: '0.8rem',
     transition: 'all 0.2s',
+  },
+  msg: {
+    marginTop: '0.5rem',
+    fontSize: '0.83rem',
+    fontWeight: 600,
   },
   infoBox: {
     fontSize: '0.78rem',
@@ -238,5 +285,15 @@ const styles = {
     borderRadius: 8,
     padding: '0.65rem 0.9rem',
     lineHeight: 1.6,
+  },
+  loading: {
+    padding: '3rem',
+    textAlign: 'center',
+    color: 'var(--text-muted)',
+  },
+  errorBox: {
+    padding: '3rem',
+    textAlign: 'center',
+    color: 'var(--accent3, #c0392b)',
   },
 }

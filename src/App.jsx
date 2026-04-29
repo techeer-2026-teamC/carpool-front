@@ -201,7 +201,7 @@ export default function App() {
         )}
 
         {currentPage === 'profile' && (
-          <ProfilePage memberId={auth.memberId} />
+          <ProfilePage />
         )}
 
         {currentPage === 'rides' && (
