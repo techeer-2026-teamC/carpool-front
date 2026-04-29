@@ -220,6 +220,7 @@ export default function App() {
           post={selectedPost}
           onClose={() => setSelectedPostId(null)}
           onJoin={handleJoin}
+          currentMemberId={auth.memberId}
         />
       )}
 

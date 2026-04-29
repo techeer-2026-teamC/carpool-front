@@ -1,7 +1,8 @@
-import React, { useEffect, useRef } from 'react'
+import React, { useEffect, useRef, useState, useCallback } from 'react'
 import L from 'leaflet'
 import { TAG_MAP } from '../data/tags'
 import { fmtPrice } from './CarpoolCard'
+import { fetchComments, createComment, removeComment } from '../api/comments'
 
 function RouteMap({ fromLat, fromLng, toLat, toLng }) {
   const containerRef = useRef(null)
@@ -40,9 +41,7 @@ function RouteMap({ fromLat, fromLng, toLat, toLng }) {
 
   if (fromLat == null && toLat == null) return null
 
-  return (
-    <div ref={containerRef} style={mapStyle} />
-  )
+  return <div ref={containerRef} style={mapStyle} />
 }
 
 const mapStyle = {
@@ -53,11 +52,81 @@ const mapStyle = {
   border: '1px solid var(--border)',
 }
 
-export default function DetailModal({ post, onClose, onJoin }) {
+function CommentItem({ comment, currentMemberId, onDelete }) {
+  const isOwn = comment.memberId === currentMemberId
+  return (
+    <div style={styles.commentItem}>
+      <div style={styles.commentMeta}>
+        <span style={styles.commentNickname}>{comment.nickname}</span>
+        <span style={styles.commentTime}>
+          {new Date(comment.createdAt).toLocaleString('ko-KR', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+        </span>
+        {isOwn && (
+          <button style={styles.commentDeleteBtn} onClick={() => onDelete(comment.id)}>삭제</button>
+        )}
+      </div>
+      <div style={styles.commentContent}>{comment.content}</div>
+    </div>
+  )
+}
+
+export default function DetailModal({ post, onClose, onJoin, currentMemberId }) {
   if (!post) return null
 
   const avail = post.seats - post.filled
   const full = avail <= 0
+
+  const [comments, setComments] = useState([])
+  const [commentInput, setCommentInput] = useState('')
+  const [submitting, setSubmitting] = useState(false)
+  const [loadingComments, setLoadingComments] = useState(true)
+
+  const loadComments = useCallback(async () => {
+    try {
+      setLoadingComments(true)
+      const data = await fetchComments(post.id)
+      setComments(data || [])
+    } catch {
+      setComments([])
+    } finally {
+      setLoadingComments(false)
+    }
+  }, [post.id])
+
+  useEffect(() => {
+    loadComments()
+  }, [loadComments])
+
+  async function handleSubmitComment() {
+    const text = commentInput.trim()
+    if (!text) return
+    try {
+      setSubmitting(true)
+      const created = await createComment(post.id, text)
+      setComments(prev => [...prev, created])
+      setCommentInput('')
+    } catch {
+      // silent fail
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  async function handleDeleteComment(commentId) {
+    try {
+      await removeComment(commentId)
+      setComments(prev => prev.filter(c => c.id !== commentId))
+    } catch {
+      // silent fail
+    }
+  }
+
+  function handleKeyDown(e) {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault()
+      handleSubmitComment()
+    }
+  }
 
   function handleOverlayClick(e) {
     if (e.target === e.currentTarget) onClose()
@@ -71,7 +140,6 @@ export default function DetailModal({ post, onClose, onJoin }) {
           <button style={styles.closeBtn} onClick={onClose}>✕</button>
         </div>
 
-        {/* 경로 미니 지도 */}
         <RouteMap
           fromLat={post.departureLat}
           fromLng={post.departureLng}
@@ -79,7 +147,6 @@ export default function DetailModal({ post, onClose, onJoin }) {
           toLng={post.destinationLng}
         />
 
-        {/* 경로 정보 */}
         <div style={styles.routeSection}>
           <div style={styles.route}>
             <span>{post.from}</span>
@@ -110,7 +177,6 @@ export default function DetailModal({ post, onClose, onJoin }) {
           )}
         </div>
 
-        {/* 드라이버 정보 */}
         <div style={styles.driverSection}>
           <div style={{ ...styles.driverAvatar, background: `${post.color}22`, color: post.color }}>
             {(post.nickname || '?')[0]}
@@ -122,22 +188,45 @@ export default function DetailModal({ post, onClose, onJoin }) {
           </div>
         </div>
 
-        {/* 댓글 / 신청 섹션 */}
+        {/* 댓글 섹션 */}
         <div style={styles.commentSection}>
           <div style={styles.commentHeader}>
             <span>댓글</span>
-            <span style={styles.commentBadge}>백엔드 연동 예정</span>
+            <span style={styles.commentBadge}>{comments.length}개</span>
           </div>
-          <div style={styles.commentEmpty}>
-            댓글 API가 준비되면 여기에 표시됩니다
+
+          <div style={styles.commentList}>
+            {loadingComments ? (
+              <div style={styles.commentEmpty}>불러오는 중...</div>
+            ) : comments.length === 0 ? (
+              <div style={styles.commentEmpty}>첫 댓글을 남겨보세요!</div>
+            ) : (
+              comments.map(c => (
+                <CommentItem
+                  key={c.id}
+                  comment={c}
+                  currentMemberId={currentMemberId}
+                  onDelete={handleDeleteComment}
+                />
+              ))
+            )}
           </div>
+
           <div style={styles.commentInputRow}>
             <input
               style={styles.commentInput}
-              placeholder="댓글을 입력하세요 (준비 중)"
-              disabled
+              placeholder="댓글을 입력하세요 (Enter로 전송)"
+              value={commentInput}
+              onChange={e => setCommentInput(e.target.value)}
+              onKeyDown={handleKeyDown}
+              maxLength={500}
+              disabled={submitting}
             />
-            <button style={styles.commentSendBtn} disabled>
+            <button
+              style={{ ...styles.commentSendBtn, ...(submitting || !commentInput.trim() ? styles.commentSendBtnDisabled : {}) }}
+              onClick={handleSubmitComment}
+              disabled={submitting || !commentInput.trim()}
+            >
               전송
             </button>
           </div>
@@ -308,13 +397,54 @@ const styles = {
     background: 'var(--accent-pale)',
     color: 'var(--accent)',
   },
+  commentList: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '0.6rem',
+    marginBottom: '0.8rem',
+    maxHeight: 200,
+    overflowY: 'auto',
+  },
+  commentItem: {
+    background: 'var(--surface)',
+    borderRadius: 8,
+    padding: '0.6rem 0.8rem',
+  },
+  commentMeta: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '0.5rem',
+    marginBottom: '0.25rem',
+  },
+  commentNickname: {
+    fontSize: '0.78rem',
+    fontWeight: 700,
+    color: 'var(--text)',
+  },
+  commentTime: {
+    fontSize: '0.7rem',
+    color: 'var(--text-muted)',
+    flex: 1,
+  },
+  commentDeleteBtn: {
+    background: 'none',
+    border: 'none',
+    color: 'var(--text-muted)',
+    fontSize: '0.7rem',
+    cursor: 'pointer',
+    padding: '0.1rem 0.3rem',
+    borderRadius: 4,
+  },
+  commentContent: {
+    fontSize: '0.85rem',
+    color: 'var(--text)',
+    lineHeight: 1.5,
+  },
   commentEmpty: {
     fontSize: '0.82rem',
     color: 'var(--text-muted)',
     padding: '0.8rem 0',
     textAlign: 'center',
-    borderBottom: '1px solid var(--border)',
-    marginBottom: '0.8rem',
   },
   commentInputRow: {
     display: 'flex',
@@ -327,17 +457,22 @@ const styles = {
     borderRadius: 8,
     padding: '0.55rem 0.9rem',
     fontSize: '0.85rem',
-    color: 'var(--text-muted)',
-    cursor: 'not-allowed',
+    color: 'var(--text)',
     outline: 'none',
   },
   commentSendBtn: {
-    background: 'var(--border)',
-    color: 'var(--text-muted)',
+    background: 'var(--accent)',
+    color: '#fff',
     border: 'none',
     borderRadius: 8,
     padding: '0.55rem 1rem',
     fontSize: '0.85rem',
+    fontWeight: 600,
+    cursor: 'pointer',
+  },
+  commentSendBtnDisabled: {
+    background: 'var(--border)',
+    color: 'var(--text-muted)',
     cursor: 'not-allowed',
   },
   joinBtn: {
