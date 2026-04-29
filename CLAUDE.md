@@ -102,3 +102,31 @@ const genId = () => Date.now().toString(36) + Math.random().toString(36).slice(2
 ## Responsive Breakpoint
 
 - 모바일: `760px` 이하 (`index.css` 미디어 쿼리)
+
+## 카카오맵 API 연동 계획
+
+### 목적
+현재 게시글 등록 시 출발지/목적지를 자유 텍스트로 입력하면 `LOCATION_COORDS`에 없는 지역은 좌표가 null로 저장되어 지도에 마커가 표시되지 않음. 카카오맵 API로 텍스트 → 좌표 변환을 자동화.
+
+### 사용 API
+- **카카오 로컬 API** — 키워드 검색 (`/v2/local/search/keyword.json`)
+- REST API 키 필요 (https://developers.kakao.com)
+- 무료 티어: 일 300,000건
+
+### 작업 범위
+
+#### 프론트엔드
+1. `PostModal.jsx` — 출발지/목적지 입력 시 카카오 키워드 검색 API 호출 → 자동완성 드롭다운 표시
+2. 사용자가 결과 선택 시 `departureLat`, `departureLng` (또는 `destinationLat`, `destinationLng`) 세팅
+3. `LOCATION_COORDS` fallback 의존 제거 (mockData.js에서 좌표 매핑 역할 분리)
+4. API 키는 `.env`의 `VITE_KAKAO_REST_API_KEY`로 관리
+
+#### 백엔드
+- 별도 작업 없음 — `Post` 엔티티에 좌표 필드 이미 존재, 프론트에서 좌표 포함해서 전송하면 그대로 저장됨
+
+### 구현 순서
+1. 카카오 개발자 콘솔에서 앱 생성 → REST API 키 발급
+2. `.env`에 `VITE_KAKAO_REST_API_KEY=...` 추가
+3. `src/api/kakao.js` 생성 — 키워드 검색 함수
+4. `PostModal.jsx` 입력 필드에 자동완성 연동
+5. `mockData.js`의 `LOCATION_COORDS`는 시드 데이터 fallback용으로만 유지

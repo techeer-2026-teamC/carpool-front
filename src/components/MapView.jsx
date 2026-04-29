@@ -1,119 +1,113 @@
 import React, { useEffect, useRef } from 'react'
-import L from 'leaflet'
 import { TAG_MAP } from '../data/tags'
-import { LOCATION_COORDS } from '../data/mockData'
 import { fmtDate, fmtPrice } from './CarpoolCard'
+
+const SW = { lat: 36.8, lng: 126.4 }
+const NE = { lat: 38.1, lng: 128.0 }
 
 export default function MapView({ posts, onOpenDetail }) {
   const mapRef = useRef(null)
   const mapInstanceRef = useRef(null)
-  const markersRef = useRef([])
+  const overlaysRef = useRef([])
 
-  useEffect(() => {
-    if (!mapRef.current) return
-    if (!mapInstanceRef.current) {
-      mapInstanceRef.current = L.map(mapRef.current, { zoomControl: true }).setView([37.5326, 127.0246], 11)
-      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-        attribution: '© <a href="https://openstreetmap.org">OpenStreetMap</a>',
-        maxZoom: 18,
-      }).addTo(mapInstanceRef.current)
-    }
-
-    const map = mapInstanceRef.current
-    markersRef.current.forEach(m => map.removeLayer(m))
-    markersRef.current = []
-
-    // 출발지 마커
-    const byFrom = {}
-    posts.forEach(p => {
-      if (!byFrom[p.from]) byFrom[p.from] = []
-      byFrom[p.from].push(p)
-    })
-
-    Object.entries(byFrom).forEach(([loc, ps]) => {
-      ps.forEach((p, idx) => {
-        const baseCoords = (p.departureLat != null && p.departureLng != null)
-          ? [p.departureLat, p.departureLng]
-          : LOCATION_COORDS[loc]
-        if (!baseCoords) return
-        const offset = idx * 0.0025
-        const latlng = [baseCoords[0] + offset, baseCoords[1] + offset]
-        const avail = p.seats - p.filled
-        const full = avail <= 0
-        const col = full ? '#c0392b' : p.color
-
-        const icon = L.divIcon({
-          className: '',
-          html: `<div style="width:40px;height:40px;border-radius:50% 50% 50% 5px;transform:rotate(-45deg);background:${col};border:2.5px solid white;box-shadow:0 3px 14px rgba(0,0,0,0.22);display:flex;align-items:center;justify-content:center;">
-            <span style="transform:rotate(45deg);font-size:0.55rem;font-weight:900;color:white;font-family:'Space Mono',monospace;text-align:center;line-height:1.1">${full ? '✕' : avail + '석'}</span>
-          </div>`,
-          iconSize: [40, 40],
-          iconAnchor: [20, 40],
-          popupAnchor: [0, -44],
-        })
-
-        const tagsHtml = (p.tags?.length)
-          ? `<div style="display:flex;flex-wrap:wrap;gap:0.25rem;margin-bottom:0.7rem">
-              ${p.tags.map(tid => {
-                const t = TAG_MAP[tid]
-                return t ? `<span style="display:inline-flex;align-items:center;gap:0.2rem;font-size:0.66rem;font-weight:600;padding:0.15rem 0.45rem;border-radius:100px;background:${t.bg};color:${t.tc}">${t.emoji} ${t.label}</span>` : ''
-              }).join('')}
-            </div>` : ''
-
-        const marker = L.marker(latlng, { icon }).addTo(map)
-        marker.bindPopup(`
-          <div style="padding:1rem 1.15rem;min-width:220px;font-family:'Noto Sans KR',sans-serif">
-            <div style="display:flex;align-items:center;gap:0.35rem;font-weight:700;font-size:0.93rem;color:var(--text);margin-bottom:0.5rem">
-              ${p.from}<span style="color:var(--accent);margin:0 4px">→</span>${p.to}
-            </div>
-            <div style="display:flex;gap:0.7rem;font-size:0.76rem;color:var(--text-muted);margin-bottom:0.6rem;flex-wrap:wrap">
-              <span>📅 ${fmtDate(p.date)}</span><span>⏰ ${p.time}</span><span>👥 ${p.filled}/${p.seats}명</span>
-            </div>
-            ${tagsHtml}
-            <div style="display:flex;justify-content:space-between;align-items:center">
-              <div style="font-family:'Space Mono',monospace;font-size:0.9rem;font-weight:700;color:var(--accent)">${fmtPrice(p.price)}<span style="font-size:0.65rem;color:var(--text-muted);font-family:'Noto Sans KR',sans-serif">/인</span></div>
-              <button onclick="window.__openDetail('${p.id}')" style="background:var(--accent);color:#fff;border:none;cursor:pointer;font-size:0.74rem;font-weight:700;font-family:'Noto Sans KR',sans-serif;padding:0.35rem 0.85rem;border-radius:7px">상세보기</button>
-            </div>
-          </div>
-        `, { maxWidth: 300, minWidth: 240 })
-
-        markersRef.current.push(marker)
-      })
-    })
-
-    // 목적지 마커
-    const toSeen = new Set()
-    posts.forEach(p => {
-      if (toSeen.has(p.to)) return
-      toSeen.add(p.to)
-      const c = (p.destinationLat != null && p.destinationLng != null)
-        ? [p.destinationLat, p.destinationLng]
-        : LOCATION_COORDS[p.to]
-      if (!c) return
-      const icon = L.divIcon({
-        className: '',
-        html: `<div style="width:13px;height:13px;border-radius:50%;background:#fff;border:2.5px solid #6b7c3f;box-shadow:0 1px 6px rgba(0,0,0,0.18)"></div>`,
-        iconSize: [13, 13],
-        iconAnchor: [6, 6],
-      })
-      const m = L.marker(c, { icon, zIndexOffset: -100 }).addTo(map)
-      m.bindTooltip(p.to, { permanent: false, direction: 'top' })
-      markersRef.current.push(m)
-    })
-
-    if (markersRef.current.length > 0) {
-      try {
-        map.fitBounds(L.featureGroup(markersRef.current).getBounds().pad(0.18))
-      } catch {}
-    }
-    setTimeout(() => map.invalidateSize(), 60)
-  }, [posts])
-
-  // 팝업 버튼 클릭 핸들러 등록
   useEffect(() => {
     window.__openDetail = onOpenDetail
     return () => { delete window.__openDetail }
   }, [onOpenDetail])
+
+  useEffect(() => {
+    if (!mapRef.current) return
+
+    window.kakao.maps.load(() => {
+      const kakao = window.kakao
+
+      if (!mapInstanceRef.current) {
+        mapInstanceRef.current = new kakao.maps.Map(mapRef.current, {
+          center: new kakao.maps.LatLng(37.5326, 127.0246),
+          level: 8,
+        })
+
+        kakao.maps.event.addListener(mapInstanceRef.current, 'center_changed', () => {
+          const map = mapInstanceRef.current
+          const c = map.getCenter()
+          const lat = Math.max(SW.lat, Math.min(NE.lat, c.getLat()))
+          const lng = Math.max(SW.lng, Math.min(NE.lng, c.getLng()))
+          if (lat !== c.getLat() || lng !== c.getLng()) {
+            map.setCenter(new kakao.maps.LatLng(lat, lng))
+          }
+        })
+      }
+
+      const map = mapInstanceRef.current
+      overlaysRef.current.forEach(o => o.setMap(null))
+      overlaysRef.current = []
+
+      posts.forEach(p => {
+        if (p.departureLat == null || p.departureLng == null) return
+
+        const avail = p.seats - p.filled
+        const full = avail <= 0
+        const col = full ? '#c0392b' : (p.color || '#6b7c3f')
+
+        const el = document.createElement('div')
+        el.innerHTML = `
+          <div style="
+            width:42px;height:42px;
+            border-radius:50% 50% 50% 5px;
+            transform:rotate(-45deg);
+            background:${col};
+            border:2.5px solid white;
+            box-shadow:0 3px 14px rgba(0,0,0,0.25);
+            display:flex;align-items:center;justify-content:center;
+            cursor:pointer;
+          ">
+            <span style="
+              transform:rotate(45deg);
+              font-size:0.55rem;font-weight:900;
+              color:white;font-family:'Space Mono',monospace;
+              text-align:center;line-height:1.1;
+            ">${full ? '✕' : avail + '석'}</span>
+          </div>
+        `
+        el.addEventListener('click', () => onOpenDetail(String(p.id)))
+
+        const overlay = new kakao.maps.CustomOverlay({
+          position: new kakao.maps.LatLng(p.departureLat, p.departureLng),
+          content: el,
+          yAnchor: 1,
+          zIndex: 3,
+        })
+        overlay.setMap(map)
+        overlaysRef.current.push(overlay)
+      })
+
+      const toSeen = new Set()
+      posts.forEach(p => {
+        if (p.destinationLat == null || p.destinationLng == null) return
+        if (toSeen.has(p.to)) return
+        toSeen.add(p.to)
+
+        const dot = document.createElement('div')
+        dot.innerHTML = `
+          <div style="
+            width:13px;height:13px;
+            border-radius:50%;
+            background:#fff;
+            border:2.5px solid #6b7c3f;
+            box-shadow:0 1px 6px rgba(0,0,0,0.18);
+          "></div>
+        `
+
+        const overlay = new kakao.maps.CustomOverlay({
+          position: new kakao.maps.LatLng(p.destinationLat, p.destinationLng),
+          content: dot,
+          zIndex: 1,
+        })
+        overlay.setMap(map)
+        overlaysRef.current.push(overlay)
+      })
+    })
+  }, [posts, onOpenDetail])
 
   return (
     <div style={styles.container}>
@@ -125,16 +119,16 @@ export default function MapView({ posts, onOpenDetail }) {
             {posts.map(p => {
               const avail = p.seats - p.filled
               return (
-                <div
-                  key={p.id}
-                  style={styles.mapCard}
-                  onClick={() => onOpenDetail(p.id)}
-                >
+                <div key={p.id} style={styles.mapCard} onClick={() => onOpenDetail(p.id)}>
                   <div style={styles.mapRoute}>
                     {p.from}
                     <span style={{ color: 'var(--accent)', margin: '0 3px' }}>→</span>
                     {p.to}
-                    <span style={{ ...styles.badge, ...(avail <= 0 ? styles.badgeFull : styles.badgeSeats), marginLeft: 'auto' }}>
+                    <span style={{
+                      ...styles.badge,
+                      ...(avail <= 0 ? styles.badgeFull : styles.badgeSeats),
+                      marginLeft: 'auto',
+                    }}>
                       {avail <= 0 ? '마감' : `${avail}석`}
                     </span>
                   </div>
@@ -151,11 +145,11 @@ export default function MapView({ posts, onOpenDetail }) {
       </div>
       <div style={styles.legend}>
         <div style={styles.legendItem}>
-          <div style={{ width: 14, height: 14, borderRadius: '50% 50% 50% 3px', transform: 'rotate(-45deg)', background: 'var(--accent)', border: '2px solid white', boxShadow: '0 1px 4px rgba(0,0,0,0.2)' }} />
+          <div style={{ width:14, height:14, borderRadius:'50% 50% 50% 3px', transform:'rotate(-45deg)', background:'var(--accent)', border:'2px solid white', boxShadow:'0 1px 4px rgba(0,0,0,0.2)' }} />
           출발지
         </div>
         <div style={styles.legendItem}>
-          <div style={{ width: 12, height: 12, borderRadius: '50%', background: '#fff', border: '2.5px solid var(--accent)' }} />
+          <div style={{ width:12, height:12, borderRadius:'50%', background:'#fff', border:'2.5px solid var(--accent)' }} />
           목적지
         </div>
       </div>
