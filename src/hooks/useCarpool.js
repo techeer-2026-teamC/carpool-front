@@ -103,6 +103,8 @@ export function useCarpool(memberId) {
         maxPassengers: Number(form.seats),
         description: form.desc || '',
         autoAccept: true,
+        price: form.price ? Number(form.price) : null,
+        tags: form.tags || [],
       })
       setPosts(prev => [normalizePost(created, memberId), ...prev])
       showToast('게시글이 등록되었습니다!')
