@@ -44,22 +44,24 @@ export default function CarpoolCard({ post, onOpen, onDelete, showDelete }) {
   return (
     <div style={styles.card} onClick={() => onOpen(post.id)}>
       <div style={styles.topBar} />
-      {showDelete && (
-        <button
-          style={styles.deleteBtn}
-          onClick={e => { e.stopPropagation(); onDelete(post.id) }}
-        >
-          삭제
-        </button>
-      )}
       <div style={styles.cardHeader}>
         <div style={styles.routeRow}>
           <span>{post.from}</span>
           <span style={{ color: 'var(--accent)' }}>→</span>
           <span>{post.to}</span>
         </div>
-        <div style={{ ...styles.badge, ...(full ? styles.badgeFull : styles.badgeSeats) }}>
-          {full ? '마감' : `${avail}석 남음`}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+          <div style={{ ...styles.badge, ...(full ? styles.badgeFull : styles.badgeSeats) }}>
+            {full ? '마감' : `${avail}석 남음`}
+          </div>
+          {showDelete && (
+            <button
+              style={styles.deleteBtn}
+              onClick={e => { e.stopPropagation(); onDelete(post.id) }}
+            >
+              삭제
+            </button>
+          )}
         </div>
       </div>
       <div style={styles.meta}>
@@ -84,7 +86,8 @@ export default function CarpoolCard({ post, onOpen, onDelete, showDelete }) {
           </div>
         </div>
         <div style={styles.price}>
-          {fmtPrice(post.price)}<span style={styles.priceSub}>/인</span>
+          {fmtPrice(post.price)}
+          {post.price && post.price !== '' && <span style={styles.priceSub}>/인</span>}
         </div>
       </div>
     </div>
@@ -215,9 +218,6 @@ const styles = {
     fontFamily: "'Noto Sans KR', sans-serif",
   },
   deleteBtn: {
-    position: 'absolute',
-    top: '0.8rem',
-    right: '0.8rem',
     background: 'rgba(192,57,43,0.1)',
     color: 'var(--accent3)',
     border: 'none',
@@ -225,5 +225,6 @@ const styles = {
     padding: '0.25rem 0.6rem',
     cursor: 'pointer',
     fontSize: '0.75rem',
+    whiteSpace: 'nowrap',
   },
 }
