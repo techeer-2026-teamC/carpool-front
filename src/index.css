@@ -12,6 +12,7 @@
   --text-muted: #7a7a6a;
   --text-dim: #b5b5a5;
   --card-glow: 0 2px 16px rgba(107, 124, 63, 0.08);
+  --bottom-nav-h: 60px;
 }
 
 * {
@@ -21,32 +22,50 @@
 }
 
 body {
-  font-family: 'Noto Sans KR', sans-serif;
+  font-family: 'Pretendard Variable', 'Pretendard', 'Noto Sans KR', sans-serif;
   background: var(--bg);
   color: var(--text);
   min-height: 100vh;
   overflow-x: hidden;
+  -webkit-font-smoothing: antialiased;
 }
 
 body::before {
   content: '';
   position: fixed;
   inset: 0;
-  background-image: radial-gradient(circle, rgba(107, 124, 63, 0.12) 1px, transparent 1px);
+  background-image: radial-gradient(circle, rgba(107, 124, 63, 0.10) 1px, transparent 1px);
   background-size: 28px 28px;
   pointer-events: none;
   z-index: 0;
 }
 
 button {
-  font-family: 'Noto Sans KR', sans-serif;
+  font-family: 'Pretendard Variable', 'Pretendard', 'Noto Sans KR', sans-serif;
   cursor: pointer;
 }
 
 input,
 select,
 textarea {
-  font-family: 'Noto Sans KR', sans-serif;
+  font-family: 'Pretendard Variable', 'Pretendard', 'Noto Sans KR', sans-serif;
+}
+
+/* 전역 focus 상태 */
+input:focus,
+textarea:focus,
+select:focus {
+  outline: none;
+  border-color: var(--accent) !important;
+  background: #fff !important;
+  box-shadow: 0 0 0 3px rgba(107, 124, 63, 0.12) !important;
+  transition: box-shadow 0.2s, border-color 0.2s;
+}
+
+/* 전역 버튼 hover */
+button:not([disabled]):active {
+  transform: scale(0.97);
+  transition: transform 0.1s;
 }
 
 /* leaflet popup overrides */
@@ -61,11 +80,56 @@ textarea {
   margin: 0 !important;
 }
 
+/* ── 애니메이션 키프레임 ── */
+
 @keyframes pulse {
   0%, 100% { opacity: 1; }
   50% { opacity: 0.3; }
 }
 
+/* 모달 중앙 입장 */
+@keyframes modalEnter {
+  from { opacity: 0; transform: scale(0.95) translateY(10px); }
+  to   { opacity: 1; transform: scale(1)    translateY(0); }
+}
+.modal-enter {
+  animation: modalEnter 0.22s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+
+/* 바텀 시트 입장 */
+@keyframes sheetUp {
+  from { transform: translateY(100%); }
+  to   { transform: translateY(0); }
+}
+.sheet-enter {
+  animation: sheetUp 0.3s cubic-bezier(0.32, 0.72, 0, 1) both;
+}
+
+/* 오버레이 fade */
+@keyframes overlayFade {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+.overlay-fade {
+  animation: overlayFade 0.2s ease both;
+}
+
+/* Toast slide-up */
+@keyframes toastSlide {
+  from { opacity: 0; transform: translate(-50%, 14px); }
+  to   { opacity: 1; transform: translate(-50%, 0); }
+}
+
+/* 태그 가로 스크롤 (모바일) */
+.tag-scroll {
+  overflow-x: auto;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  flex-wrap: nowrap !important;
+}
+.tag-scroll::-webkit-scrollbar { display: none; }
+
+/* ── 반응형 ── */
 @media (max-width: 760px) {
   .cards-grid {
     grid-template-columns: 1fr !important;
@@ -74,9 +138,13 @@ textarea {
     grid-template-columns: 1fr !important;
   }
   .stats-row {
-    gap: 1.5rem !important;
+    gap: 0.8rem !important;
   }
   .search-top {
     flex-direction: column !important;
+  }
+  /* 하단 탭 바 공간 확보 */
+  .main-content {
+    padding-bottom: calc(var(--bottom-nav-h) + 1rem) !important;
   }
 }

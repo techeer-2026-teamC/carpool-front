@@ -8,3 +8,7 @@ export async function login(email, password) {
   const res = await api.post('/auth/login', { email, password })
   return res.data.accessToken
 }
+
+export async function logout() {
+  return api.post('/auth/logout')
+}

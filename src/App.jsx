@@ -1,4 +1,6 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
+import { useLocation, useNavigate } from 'react-router-dom'
+import { useIsMobile } from './hooks/useMobile'
 import LoginPage from './components/LoginPage'
 import Nav from './components/Nav'
 import Hero from './components/Hero'
@@ -11,6 +13,7 @@ import ProfilePage from './components/ProfilePage'
 import RidePage from './components/RidePage'
 import Toast from './components/Toast'
 import { useCarpool } from './hooks/useCarpool'
+import { logout } from './api/auth'
 
 function parseMemberId(token) {
   try {
@@ -29,6 +32,16 @@ function getInitialAuth() {
 
 export default function App() {
   const [auth, setAuth] = useState(getInitialAuth)
+  const location = useLocation()
+  const navigate = useNavigate()
+  const isMobile = useIsMobile()
+
+  const currentPage = {
+    '/':        'list',
+    '/my':      'my',
+    '/rides':   'rides',
+    '/profile': 'profile',
+  }[location.pathname] || 'list'
 
   function handleLogin(token) {
     const memberId = parseMemberId(token)
@@ -36,10 +49,21 @@ export default function App() {
     setAuth({ token, memberId })
   }
 
-  function handleLogout() {
+  async function handleLogout() {
+    try { await logout() } catch {}
     localStorage.removeItem('accessToken')
     setAuth({ token: null, memberId: null })
+    navigate('/')
   }
+
+  useEffect(() => {
+    const onAuthExpired = () => {
+      setAuth({ token: null, memberId: null })
+      navigate('/')
+    }
+    window.addEventListener('auth:logout', onAuthExpired)
+    return () => window.removeEventListener('auth:logout', onAuthExpired)
+  }, [navigate])
 
   const {
     posts,
@@ -47,7 +71,6 @@ export default function App() {
     myPosts,
     filteredMyPosts,
     loading,
-    currentPage, setCurrentPage,
     currentView, setCurrentView,
     currentFilter, setCurrentFilter,
     searchQuery, setSearchQuery,
@@ -81,8 +104,6 @@ export default function App() {
   return (
     <div>
       <Nav
-        currentPage={currentPage}
-        onPageChange={setCurrentPage}
         onOpenPost={() => setShowPostModal(true)}
         onLogout={handleLogout}
       />
@@ -91,7 +112,7 @@ export default function App() {
         <Hero totalPosts={posts.length} />
       )}
 
-      <div style={styles.main}>
+      <div style={{ ...styles.main, paddingBottom: isMobile ? 'calc(var(--bottom-nav-h) + 1.5rem)' : '2rem' }}>
         {(currentPage === 'list' || currentPage === 'my') && (
           <SearchSection
             onSearch={setSearchQuery}

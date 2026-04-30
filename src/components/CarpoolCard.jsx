@@ -1,4 +1,4 @@
-import React from 'react'
+import React, { useState } from 'react'
 import { TAG_MAP } from '../data/tags'
 
 function fmtDate(d) {
@@ -40,10 +40,24 @@ export { TagPill, fmtDate, fmtPrice }
 export default function CarpoolCard({ post, onOpen, onDelete, showDelete }) {
   const avail = post.seats - post.filled
   const full = avail <= 0
+  const [hovered, setHovered] = useState(false)
+
+  function handleClick() {
+    setHovered(false)
+    onOpen(post.id)
+  }
 
   return (
-    <div style={styles.card} onClick={() => onOpen(post.id)}>
-      <div style={styles.topBar} />
+    <div
+      style={{
+        ...styles.card,
+        ...(hovered ? styles.cardHovered : {}),
+      }}
+      onClick={handleClick}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+    >
+      <div style={{ ...styles.topBar, opacity: hovered ? 1 : 0 }} />
       <div style={styles.cardHeader}>
         <div style={styles.routeRow}>
           <span>{post.from}</span>
@@ -101,10 +115,16 @@ const styles = {
     borderRadius: 16,
     padding: '1.3rem',
     cursor: 'pointer',
-    transition: 'all 0.25s',
+    transition: 'box-shadow 0.25s, border-color 0.25s, transform 0.2s',
     boxShadow: 'var(--card-glow)',
     position: 'relative',
     overflow: 'hidden',
+    outline: 'none',
+  },
+  cardHovered: {
+    borderColor: 'var(--accent)',
+    boxShadow: '0 8px 32px rgba(107, 124, 63, 0.18)',
+    transform: 'translateY(-2px)',
   },
   topBar: {
     position: 'absolute',
@@ -113,7 +133,7 @@ const styles = {
     right: 0,
     height: 3,
     background: 'var(--accent)',
-    opacity: 0,
+    transition: 'opacity 0.25s',
   },
   cardHeader: {
     display: 'flex',

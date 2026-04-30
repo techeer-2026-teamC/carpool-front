@@ -1,8 +1,10 @@
 import React, { useState } from 'react'
 import { ALL_TAGS } from '../data/tags'
 import { LOCATION_COORDS } from '../data/mockData'
+import { useIsMobile } from '../hooks/useMobile'
 
 export default function PostModal({ onClose, onSubmit }) {
+  const isMobile = useIsMobile()
   const today = new Date().toISOString().split('T')[0]
   const [form, setForm] = useState({
     from: '', to: '', date: today, time: '',
@@ -48,9 +50,18 @@ export default function PostModal({ onClose, onSubmit }) {
     if (e.target === e.currentTarget) onClose()
   }
 
+  const overlayStyle = isMobile
+    ? { ...styles.overlay, alignItems: 'flex-end', padding: 0 }
+    : styles.overlay
+
+  const modalStyle = isMobile
+    ? { ...styles.modal, borderRadius: '20px 20px 0 0', maxWidth: '100%', animation: 'sheetUp 0.3s cubic-bezier(0.32,0.72,0,1) both' }
+    : { ...styles.modal, animation: 'modalEnter 0.22s cubic-bezier(0.34,1.56,0.64,1) both' }
+
   return (
-    <div style={styles.overlay} onClick={handleOverlayClick}>
-      <div style={styles.modal}>
+    <div className="overlay-fade" style={overlayStyle} onClick={handleOverlayClick}>
+      <div style={modalStyle}>
+        {isMobile && <div style={styles.dragHandle} />}
         <div style={styles.header}>
           <div style={styles.title}>카풀 게시글 등록</div>
           <button style={styles.closeBtn} onClick={onClose}>✕</button>
@@ -171,8 +182,15 @@ const styles = {
     maxWidth: 540,
     maxHeight: '92vh',
     overflowY: 'auto',
-    padding: '2rem',
+    padding: '1.5rem 1.5rem 2rem',
     boxShadow: '0 20px 60px rgba(42,42,31,0.15)',
+  },
+  dragHandle: {
+    width: 36,
+    height: 4,
+    background: 'var(--border)',
+    borderRadius: 2,
+    margin: '0 auto 1.2rem',
   },
   header: {
     display: 'flex',

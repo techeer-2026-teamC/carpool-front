@@ -34,7 +34,6 @@ function normalizePost(post, memberId) {
 export function useCarpool(memberId) {
   const [posts, setPosts] = useState([])
   const [loading, setLoading] = useState(true)
-  const [currentPage, setCurrentPage] = useState('list')
   const [currentView, setCurrentView] = useState('card')
   const [currentFilter, setCurrentFilter] = useState('all')
   const [searchQuery, setSearchQuery] = useState({ from: '', to: '', date: '' })
@@ -47,6 +46,7 @@ export function useCarpool(memberId) {
   }, [])
 
   const loadPosts = useCallback(async () => {
+    if (!memberId) { setLoading(false); return }
     try {
       setLoading(true)
       const data = await fetchPosts()
@@ -150,7 +150,6 @@ export function useCarpool(memberId) {
     myPosts,
     filteredMyPosts,
     loading,
-    currentPage, setCurrentPage,
     currentView, setCurrentView,
     currentFilter, setCurrentFilter,
     searchQuery, setSearchQuery,

@@ -41,8 +41,8 @@ async function request(path, options = {}, retry = true) {
       return request(path, options, false)
     } catch {
       clearToken()
-      window.location.reload()
-      return
+      window.dispatchEvent(new CustomEvent('auth:logout'))
+      throw new Error('로그인이 필요합니다.')
     }
   }
 

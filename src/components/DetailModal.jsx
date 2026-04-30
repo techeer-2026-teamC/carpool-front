@@ -3,6 +3,8 @@ import L from 'leaflet'
 import { TAG_MAP } from '../data/tags'
 import { fmtPrice } from './CarpoolCard'
 import { fetchComments, createComment, removeComment } from '../api/comments'
+import { getPostApplications, acceptApplication, rejectApplication, cancelAcceptApplication, cancelRejectApplication } from '../api/applications'
+import { useIsMobile } from '../hooks/useMobile'
 
 function RouteMap({ fromLat, fromLng, toLat, toLng }) {
   const containerRef = useRef(null)
@@ -71,6 +73,7 @@ function CommentItem({ comment, currentMemberId, onDelete }) {
 }
 
 export default function DetailModal({ post, onClose, onJoin, currentMemberId }) {
+  const isMobile = useIsMobile()
   if (!post) return null
 
   const avail = post.seats - post.filled
@@ -81,6 +84,10 @@ export default function DetailModal({ post, onClose, onJoin, currentMemberId }) 
   const [submitting, setSubmitting] = useState(false)
   const [loadingComments, setLoadingComments] = useState(true)
   const [commentError, setCommentError] = useState('')
+
+  const [applications, setApplications] = useState([])
+  const [loadingApps, setLoadingApps] = useState(false)
+  const [appError, setAppError] = useState('')
 
   const loadComments = useCallback(async () => {
     try {
@@ -97,6 +104,55 @@ export default function DetailModal({ post, onClose, onJoin, currentMemberId }) 
   useEffect(() => {
     loadComments()
   }, [loadComments])
+
+  useEffect(() => {
+    if (!post.isMe) return
+    setLoadingApps(true)
+    getPostApplications(post.id)
+      .then(data => setApplications(data || []))
+      .catch(() => setAppError('신청 목록을 불러오지 못했습니다.'))
+      .finally(() => setLoadingApps(false))
+  }, [post.id, post.isMe])
+
+  async function handleAccept(appId) {
+    setAppError('')
+    try {
+      await acceptApplication(appId)
+      setApplications(prev => prev.map(a => a.id === appId ? { ...a, status: 'ACCEPTED' } : a))
+    } catch (e) {
+      setAppError(e.message || '수락에 실패했습니다.')
+    }
+  }
+
+  async function handleReject(appId) {
+    setAppError('')
+    try {
+      await rejectApplication(appId)
+      setApplications(prev => prev.map(a => a.id === appId ? { ...a, status: 'REJECTED' } : a))
+    } catch (e) {
+      setAppError(e.message || '거절에 실패했습니다.')
+    }
+  }
+
+  async function handleCancelAccept(appId) {
+    setAppError('')
+    try {
+      await cancelAcceptApplication(appId)
+      setApplications(prev => prev.map(a => a.id === appId ? { ...a, status: 'PENDING' } : a))
+    } catch (e) {
+      setAppError(e.message || '수락 취소에 실패했습니다.')
+    }
+  }
+
+  async function handleCancelReject(appId) {
+    setAppError('')
+    try {
+      await cancelRejectApplication(appId)
+      setApplications(prev => prev.map(a => a.id === appId ? { ...a, status: 'PENDING' } : a))
+    } catch (e) {
+      setAppError(e.message || '거절 취소에 실패했습니다.')
+    }
+  }
 
   async function handleSubmitComment() {
     const text = commentInput.trim()
@@ -135,9 +191,18 @@ export default function DetailModal({ post, onClose, onJoin, currentMemberId }) 
     if (e.target === e.currentTarget) onClose()
   }
 
+  const overlayStyle = isMobile
+    ? { ...styles.overlay, alignItems: 'flex-end', padding: 0 }
+    : styles.overlay
+
+  const modalStyle = isMobile
+    ? { ...styles.modal, borderRadius: '20px 20px 0 0', maxWidth: '100%', animation: 'sheetUp 0.3s cubic-bezier(0.32,0.72,0,1) both' }
+    : { ...styles.modal, animation: 'modalEnter 0.22s cubic-bezier(0.34,1.56,0.64,1) both' }
+
   return (
-    <div style={styles.overlay} onClick={handleOverlayClick}>
-      <div style={styles.modal}>
+    <div className="overlay-fade" style={overlayStyle} onClick={handleOverlayClick}>
+      <div style={modalStyle}>
+        {isMobile && <div style={styles.dragHandle} />}
         <div style={styles.header}>
           <div style={styles.title}>카풀 상세</div>
           <button style={styles.closeBtn} onClick={onClose}>✕</button>
@@ -238,13 +303,67 @@ export default function DetailModal({ post, onClose, onJoin, currentMemberId }) 
           </div>
         </div>
 
-        <button
-          style={{ ...styles.joinBtn, ...(full ? styles.joinBtnDisabled : {}) }}
-          disabled={full}
-          onClick={() => onJoin(post.id)}
-        >
-          {full ? '마감된 카풀입니다' : '참여 신청하기'}
-        </button>
+        {post.isMe ? (
+          <div style={styles.appSection}>
+            <div style={styles.appHeader}>
+              <span>신청 관리</span>
+              <span style={styles.appBadge}>
+                {applications.filter(a => a.status === 'PENDING').length}명 대기중
+              </span>
+            </div>
+            {loadingApps ? (
+              <div style={styles.appEmpty}>불러오는 중...</div>
+            ) : appError ? (
+              <div style={styles.commentErrorMsg}>{appError}</div>
+            ) : applications.length === 0 ? (
+              <div style={styles.appEmpty}>아직 신청자가 없습니다</div>
+            ) : (
+              <div style={styles.appList}>
+                {applications.map(app => (
+                  <div key={app.id} style={styles.appItem}>
+                    <div style={styles.appInfo}>
+                      <span style={styles.appNickname}>{app.nickname}</span>
+                      <span style={{
+                        ...styles.appStatus,
+                        ...(app.status === 'ACCEPTED' ? styles.appStatusAccepted
+                          : app.status === 'REJECTED' ? styles.appStatusRejected
+                          : styles.appStatusPending),
+                      }}>
+                        {app.status === 'ACCEPTED' ? '수락됨'
+                          : app.status === 'REJECTED' ? '거절됨'
+                          : '대기중'}
+                      </span>
+                    </div>
+                    {app.status === 'PENDING' && (
+                      <div style={styles.appBtns}>
+                        <button style={styles.acceptBtn} onClick={() => handleAccept(app.id)}>수락</button>
+                        <button style={styles.rejectBtn} onClick={() => handleReject(app.id)}>거절</button>
+                      </div>
+                    )}
+                    {app.status === 'ACCEPTED' && (
+                      <div style={styles.appBtns}>
+                        <button style={styles.cancelBtn} onClick={() => handleCancelAccept(app.id)}>수락 취소</button>
+                      </div>
+                    )}
+                    {app.status === 'REJECTED' && (
+                      <div style={styles.appBtns}>
+                        <button style={styles.cancelBtn} onClick={() => handleCancelReject(app.id)}>거절 취소</button>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        ) : (
+          <button
+            style={{ ...styles.joinBtn, ...(full ? styles.joinBtnDisabled : {}) }}
+            disabled={full}
+            onClick={() => onJoin(post.id)}
+          >
+            {full ? '마감된 카풀입니다' : '참여 신청하기'}
+          </button>
+        )}
       </div>
     </div>
   )
@@ -279,8 +398,15 @@ const styles = {
     maxWidth: 540,
     maxHeight: '92vh',
     overflowY: 'auto',
-    padding: '2rem',
+    padding: '1.5rem 1.5rem 2rem',
     boxShadow: '0 20px 60px rgba(42,42,31,0.15)',
+  },
+  dragHandle: {
+    width: 36,
+    height: 4,
+    background: 'var(--border)',
+    borderRadius: 2,
+    margin: '0 auto 1.2rem',
   },
   header: {
     display: 'flex',
@@ -505,5 +631,108 @@ const styles = {
     background: 'var(--border)',
     color: 'var(--text-muted)',
     cursor: 'not-allowed',
+  },
+  appSection: {
+    background: 'var(--surface2)',
+    borderRadius: 12,
+    padding: '1rem 1.2rem',
+  },
+  appHeader: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '0.5rem',
+    fontWeight: 700,
+    fontSize: '0.9rem',
+    marginBottom: '0.8rem',
+    color: 'var(--text)',
+  },
+  appBadge: {
+    fontSize: '0.68rem',
+    fontWeight: 600,
+    padding: '0.15rem 0.5rem',
+    borderRadius: 100,
+    background: 'var(--accent-pale)',
+    color: 'var(--accent)',
+  },
+  appList: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '0.5rem',
+  },
+  appItem: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    background: 'var(--surface)',
+    borderRadius: 8,
+    padding: '0.6rem 0.8rem',
+  },
+  appInfo: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '0.5rem',
+  },
+  appNickname: {
+    fontSize: '0.85rem',
+    fontWeight: 600,
+    color: 'var(--text)',
+  },
+  appStatus: {
+    fontSize: '0.7rem',
+    fontWeight: 600,
+    padding: '0.15rem 0.5rem',
+    borderRadius: 100,
+  },
+  appStatusPending: {
+    background: 'rgba(184,134,11,0.1)',
+    color: '#b8860b',
+  },
+  appStatusAccepted: {
+    background: 'var(--accent-pale)',
+    color: 'var(--accent)',
+  },
+  appStatusRejected: {
+    background: 'rgba(192,57,43,0.1)',
+    color: 'var(--accent3)',
+  },
+  appBtns: {
+    display: 'flex',
+    gap: '0.4rem',
+  },
+  acceptBtn: {
+    background: 'var(--accent)',
+    color: '#fff',
+    border: 'none',
+    borderRadius: 6,
+    padding: '0.3rem 0.75rem',
+    fontSize: '0.78rem',
+    fontWeight: 600,
+    cursor: 'pointer',
+  },
+  rejectBtn: {
+    background: 'rgba(192,57,43,0.1)',
+    color: 'var(--accent3)',
+    border: 'none',
+    borderRadius: 6,
+    padding: '0.3rem 0.75rem',
+    fontSize: '0.78rem',
+    fontWeight: 600,
+    cursor: 'pointer',
+  },
+  cancelBtn: {
+    background: 'rgba(120,120,120,0.12)',
+    color: 'var(--text-muted)',
+    border: 'none',
+    borderRadius: 6,
+    padding: '0.3rem 0.75rem',
+    fontSize: '0.78rem',
+    fontWeight: 600,
+    cursor: 'pointer',
+  },
+  appEmpty: {
+    fontSize: '0.82rem',
+    color: 'var(--text-muted)',
+    padding: '0.5rem 0',
+    textAlign: 'center',
   },
 }
