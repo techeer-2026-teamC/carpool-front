@@ -13,3 +13,7 @@ export async function updateProfile({ nickname, currentPassword, newPassword }) 
   const res = await api.put('/members/me', body)
   return res.data
 }
+
+export async function withdrawMember() {
+  return api.delete('/members/me')
+}

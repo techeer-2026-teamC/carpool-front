@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react'
-import { getMyProfile, updateProfile } from '../api/members'
+import { getMyProfile, updateProfile, withdrawMember } from '../api/members'
 
-export default function ProfilePage() {
+export default function ProfilePage({ onLogout }) {
   const [profile, setProfile] = useState(null)
   const [loadError, setLoadError] = useState(null)
 
@@ -12,6 +12,9 @@ export default function ProfilePage() {
   const [pwForm, setPwForm] = useState({ currentPassword: '', newPassword: '', confirm: '' })
   const [pwMsg, setPwMsg] = useState(null)
   const [pwLoading, setPwLoading] = useState(false)
+
+  const [withdrawLoading, setWithdrawLoading] = useState(false)
+  const [withdrawMsg, setWithdrawMsg] = useState(null)
 
   useEffect(() => {
     getMyProfile()
@@ -36,6 +39,20 @@ export default function ProfilePage() {
       setNicknameMsg({ ok: false, text: err.message || '변경에 실패했습니다.' })
     } finally {
       setNicknameLoading(false)
+    }
+  }
+
+  async function handleWithdraw() {
+    if (!window.confirm('정말 탈퇴하시겠습니까? 모든 데이터가 삭제되며 되돌릴 수 없습니다.')) return
+    setWithdrawLoading(true)
+    setWithdrawMsg(null)
+    try {
+      await withdrawMember()
+      if (onLogout) onLogout()
+    } catch (e) {
+      setWithdrawMsg({ ok: false, text: e.message || '탈퇴에 실패했습니다.' })
+    } finally {
+      setWithdrawLoading(false)
     }
   }
 
@@ -171,6 +188,28 @@ export default function ProfilePage() {
         <div style={styles.infoBox}>
           차량 등록 API (<code>POST /api/v1/vehicles</code>) 개발 후 활성화됩니다.
         </div>
+      </section>
+
+      {/* 회원 탈퇴 */}
+      <section style={styles.card}>
+        <div style={styles.cardHeader}>
+          <div style={styles.dot} />
+          <h2 style={styles.cardTitle}>회원 탈퇴</h2>
+          <span style={{ ...styles.badge, background: 'rgba(192,57,43,0.08)', color: 'var(--accent3, #c0392b)' }}>주의</span>
+        </div>
+        <div style={styles.infoBox}>
+          탈퇴 시 모든 게시글, 댓글, 신청 내역이 삭제되며 되돌릴 수 없습니다.
+        </div>
+        <button
+          style={{ ...styles.submitBtn, background: 'rgba(192,57,43,0.1)', color: 'var(--accent3, #c0392b)', marginTop: '1rem' }}
+          onClick={handleWithdraw}
+          disabled={withdrawLoading}
+        >
+          {withdrawLoading ? '처리 중...' : '회원 탈퇴'}
+        </button>
+        {withdrawMsg && (
+          <div style={{ ...styles.msg, color: 'var(--accent3, #c0392b)' }}>{withdrawMsg.text}</div>
+        )}
       </section>
     </div>
   )

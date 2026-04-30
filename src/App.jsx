@@ -202,7 +202,7 @@ export default function App() {
         )}
 
         {currentPage === 'profile' && (
-          <ProfilePage />
+          <ProfilePage onLogout={handleLogout} />
         )}
 
         {currentPage === 'rides' && (

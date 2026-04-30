@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo, useCallback } from 'react'
 import { fetchPosts, createPost as apiCreatePost, removePost as apiRemovePost } from '../api/posts'
+import { applyPost } from '../api/applications'
 
 const COLORS = ['#6b7c3f', '#8a9e50', '#4a5a2a', '#a0845c', '#7a9a6b', '#5c7a4a']
 
@@ -131,12 +132,16 @@ export function useCarpool(memberId) {
     }
   }, [showToast])
 
-  // ride API 미완성 — 낙관적 업데이트만
-  const joinCarpool = useCallback((id) => {
-    setPosts(prev => prev.map(p =>
-      p.id === id ? { ...p, filled: Math.min(p.filled + 1, p.seats) } : p
-    ))
-    showToast('참여 신청이 완료되었습니다!')
+  const joinCarpool = useCallback(async (id) => {
+    try {
+      await applyPost(id)
+      setPosts(prev => prev.map(p =>
+        p.id === id ? { ...p, filled: Math.min(p.filled + 1, p.seats) } : p
+      ))
+      showToast('참여 신청이 완료되었습니다!')
+    } catch (e) {
+      showToast(e.message || '신청에 실패했습니다.')
+    }
   }, [showToast])
 
   return {
