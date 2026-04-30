@@ -64,7 +64,7 @@ export default function SearchSection({ onSearch, onClear, selectedTagFilters, o
               onClick={() => onToggleTag(t.id)}
               style={{
                 ...styles.tagBtn,
-                ...(active ? { background: t.bg, color: t.tc, borderColor: t.tc } : {}),
+                ...(active ? { background: t.bg, color: t.tc, border: `1.5px solid ${t.tc}` } : {}),
               }}
             >
               {t.emoji} {t.label}

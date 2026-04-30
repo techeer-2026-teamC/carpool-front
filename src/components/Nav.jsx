@@ -10,7 +10,7 @@ const NAV_TABS = [
 export default function Nav({ currentPage, onPageChange, onOpenPost, onLogout }) {
   return (
     <nav style={styles.nav}>
-      <div style={styles.logo}>
+      <div style={styles.logo} onClick={() => onPageChange('list')}>
         같이<span style={{ color: 'var(--text)' }}>타</span>
       </div>
       <div style={styles.navLinks}>
@@ -56,6 +56,7 @@ const styles = {
     fontWeight: 700,
     color: 'var(--accent)',
     letterSpacing: '-0.5px',
+    cursor: 'pointer',
   },
   navLinks: {
     display: 'flex',

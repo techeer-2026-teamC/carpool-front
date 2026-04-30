@@ -1,117 +1,132 @@
-import React, { useEffect, useRef } from 'react'
-import { TAG_MAP } from '../data/tags'
+import React, { useEffect, useRef, useState } from 'react'
 import { fmtDate, fmtPrice } from './CarpoolCard'
 
+const KAKAO_JS_KEY = import.meta.env.VITE_KAKAO_JS_KEY
 const SW = { lat: 36.8, lng: 126.4 }
 const NE = { lat: 38.1, lng: 128.0 }
+
+let sdkPromise = null
+
+function loadSDK() {
+  if (sdkPromise) return sdkPromise
+  sdkPromise = new Promise((resolve, reject) => {
+    if (window.kakao?.maps?.Map) { resolve(); return }
+    const script = document.createElement('script')
+    script.src = `https://dapi.kakao.com/v2/maps/sdk.js?appkey=${KAKAO_JS_KEY}&autoload=false`
+    script.onload = () => window.kakao.maps.load(resolve)
+    script.onerror = () => reject(new Error('카카오맵 SDK 로드 실패'))
+    document.head.appendChild(script)
+  })
+  return sdkPromise
+}
 
 export default function MapView({ posts, onOpenDetail }) {
   const mapRef = useRef(null)
   const mapInstanceRef = useRef(null)
   const overlaysRef = useRef([])
+  const [sdkReady, setSdkReady] = useState(false)
+  const [error, setError] = useState(null)
 
   useEffect(() => {
     window.__openDetail = onOpenDetail
     return () => { delete window.__openDetail }
   }, [onOpenDetail])
 
+  // SDK 로드
   useEffect(() => {
-    if (!mapRef.current) return
+    loadSDK()
+      .then(() => setSdkReady(true))
+      .catch(e => setError(e.message))
+  }, [])
 
-    window.kakao.maps.load(() => {
-      const kakao = window.kakao
+  // 지도 초기화 (SDK 준비 + DOM 준비 후)
+  useEffect(() => {
+    if (!sdkReady || !mapRef.current) return
 
-      if (!mapInstanceRef.current) {
-        mapInstanceRef.current = new kakao.maps.Map(mapRef.current, {
-          center: new kakao.maps.LatLng(37.5326, 127.0246),
-          level: 8,
-        })
-
-        kakao.maps.event.addListener(mapInstanceRef.current, 'center_changed', () => {
-          const map = mapInstanceRef.current
-          const c = map.getCenter()
-          const lat = Math.max(SW.lat, Math.min(NE.lat, c.getLat()))
-          const lng = Math.max(SW.lng, Math.min(NE.lng, c.getLng()))
-          if (lat !== c.getLat() || lng !== c.getLng()) {
-            map.setCenter(new kakao.maps.LatLng(lat, lng))
-          }
-        })
-      }
-
-      const map = mapInstanceRef.current
-      overlaysRef.current.forEach(o => o.setMap(null))
-      overlaysRef.current = []
-
-      posts.forEach(p => {
-        if (p.departureLat == null || p.departureLng == null) return
-
-        const avail = p.seats - p.filled
-        const full = avail <= 0
-        const col = full ? '#c0392b' : (p.color || '#6b7c3f')
-
-        const el = document.createElement('div')
-        el.innerHTML = `
-          <div style="
-            width:42px;height:42px;
-            border-radius:50% 50% 50% 5px;
-            transform:rotate(-45deg);
-            background:${col};
-            border:2.5px solid white;
-            box-shadow:0 3px 14px rgba(0,0,0,0.25);
-            display:flex;align-items:center;justify-content:center;
-            cursor:pointer;
-          ">
-            <span style="
-              transform:rotate(45deg);
-              font-size:0.55rem;font-weight:900;
-              color:white;font-family:'Space Mono',monospace;
-              text-align:center;line-height:1.1;
-            ">${full ? '✕' : avail + '석'}</span>
-          </div>
-        `
-        el.addEventListener('click', () => onOpenDetail(String(p.id)))
-
-        const overlay = new kakao.maps.CustomOverlay({
-          position: new kakao.maps.LatLng(p.departureLat, p.departureLng),
-          content: el,
-          yAnchor: 1,
-          zIndex: 3,
-        })
-        overlay.setMap(map)
-        overlaysRef.current.push(overlay)
-      })
-
-      const toSeen = new Set()
-      posts.forEach(p => {
-        if (p.destinationLat == null || p.destinationLng == null) return
-        if (toSeen.has(p.to)) return
-        toSeen.add(p.to)
-
-        const dot = document.createElement('div')
-        dot.innerHTML = `
-          <div style="
-            width:13px;height:13px;
-            border-radius:50%;
-            background:#fff;
-            border:2.5px solid #6b7c3f;
-            box-shadow:0 1px 6px rgba(0,0,0,0.18);
-          "></div>
-        `
-
-        const overlay = new kakao.maps.CustomOverlay({
-          position: new kakao.maps.LatLng(p.destinationLat, p.destinationLng),
-          content: dot,
-          zIndex: 1,
-        })
-        overlay.setMap(map)
-        overlaysRef.current.push(overlay)
-      })
+    const kakao = window.kakao
+    const map = new kakao.maps.Map(mapRef.current, {
+      center: new kakao.maps.LatLng(37.5326, 127.0246),
+      level: 8,
     })
-  }, [posts, onOpenDetail])
+    mapInstanceRef.current = map
+
+    kakao.maps.event.addListener(map, 'center_changed', () => {
+      const c = map.getCenter()
+      const lat = Math.max(SW.lat, Math.min(NE.lat, c.getLat()))
+      const lng = Math.max(SW.lng, Math.min(NE.lng, c.getLng()))
+      if (lat !== c.getLat() || lng !== c.getLng()) {
+        map.setCenter(new kakao.maps.LatLng(lat, lng))
+      }
+    })
+
+    return () => {
+      mapInstanceRef.current = null
+    }
+  }, [sdkReady])
+
+  // 마커 렌더링
+  useEffect(() => {
+    const map = mapInstanceRef.current
+    if (!map) return
+
+    const kakao = window.kakao
+    overlaysRef.current.forEach(o => o.setMap(null))
+    overlaysRef.current = []
+
+    posts.forEach(p => {
+      if (p.departureLat == null || p.departureLng == null) return
+
+      const avail = p.seats - p.filled
+      const full = avail <= 0
+      const col = full ? '#c0392b' : (p.color || '#6b7c3f')
+
+      const el = document.createElement('div')
+      el.innerHTML = `
+        <div style="width:42px;height:42px;border-radius:50% 50% 50% 5px;transform:rotate(-45deg);background:${col};border:2.5px solid white;box-shadow:0 3px 14px rgba(0,0,0,0.25);display:flex;align-items:center;justify-content:center;cursor:pointer;">
+          <span style="transform:rotate(45deg);font-size:0.55rem;font-weight:900;color:white;font-family:'Space Mono',monospace;text-align:center;line-height:1.1;">${full ? '✕' : avail + '석'}</span>
+        </div>
+      `
+      el.addEventListener('click', () => onOpenDetail(String(p.id)))
+
+      const overlay = new kakao.maps.CustomOverlay({
+        position: new kakao.maps.LatLng(p.departureLat, p.departureLng),
+        content: el,
+        yAnchor: 1,
+        zIndex: 3,
+      })
+      overlay.setMap(map)
+      overlaysRef.current.push(overlay)
+    })
+
+    const toSeen = new Set()
+    posts.forEach(p => {
+      if (p.destinationLat == null || p.destinationLng == null) return
+      if (toSeen.has(p.to)) return
+      toSeen.add(p.to)
+
+      const dot = document.createElement('div')
+      dot.innerHTML = `<div style="width:13px;height:13px;border-radius:50%;background:#fff;border:2.5px solid #6b7c3f;box-shadow:0 1px 6px rgba(0,0,0,0.18);"></div>`
+
+      const overlay = new kakao.maps.CustomOverlay({
+        position: new kakao.maps.LatLng(p.destinationLat, p.destinationLng),
+        content: dot,
+        zIndex: 1,
+      })
+      overlay.setMap(map)
+      overlaysRef.current.push(overlay)
+    })
+  }, [sdkReady, posts, onOpenDetail])
 
   return (
     <div style={styles.container}>
-      <div ref={mapRef} style={styles.map} />
+      <div ref={mapRef} style={styles.map}>
+        {!sdkReady && !error && (
+          <div style={styles.loadingOverlay}>지도 불러오는 중...</div>
+        )}
+        {error && (
+          <div style={styles.loadingOverlay}>⚠️ {error}</div>
+        )}
+      </div>
       <div style={styles.sidebar}>
         <div style={styles.sidebarInner}>
           <div style={styles.sidebarHeader}>총 {posts.length}개 카풀</div>
@@ -124,11 +139,7 @@ export default function MapView({ posts, onOpenDetail }) {
                     {p.from}
                     <span style={{ color: 'var(--accent)', margin: '0 3px' }}>→</span>
                     {p.to}
-                    <span style={{
-                      ...styles.badge,
-                      ...(avail <= 0 ? styles.badgeFull : styles.badgeSeats),
-                      marginLeft: 'auto',
-                    }}>
+                    <span style={{ ...styles.badge, ...(avail <= 0 ? styles.badgeFull : styles.badgeSeats), marginLeft: 'auto' }}>
                       {avail <= 0 ? '마감' : `${avail}석`}
                     </span>
                   </div>
@@ -169,6 +180,18 @@ const styles = {
   map: {
     height: 660,
     width: '100%',
+    background: '#f5f5f0',
+  },
+  loadingOverlay: {
+    position: 'absolute',
+    inset: 0,
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    fontSize: '0.9rem',
+    color: 'var(--text-muted)',
+    background: '#f5f5f0',
+    zIndex: 10,
   },
   sidebar: {
     position: 'absolute',
@@ -207,7 +230,6 @@ const styles = {
     padding: '0.85rem 1.1rem',
     borderBottom: '1px solid var(--border)',
     cursor: 'pointer',
-    transition: 'background 0.15s',
   },
   mapRoute: {
     display: 'flex',
