@@ -80,6 +80,7 @@ export default function DetailModal({ post, onClose, onJoin, currentMemberId }) 
   const [commentInput, setCommentInput] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [loadingComments, setLoadingComments] = useState(true)
+  const [commentError, setCommentError] = useState('')
 
   const loadComments = useCallback(async () => {
     try {
@@ -100,24 +101,26 @@ export default function DetailModal({ post, onClose, onJoin, currentMemberId }) 
   async function handleSubmitComment() {
     const text = commentInput.trim()
     if (!text) return
+    setCommentError('')
     try {
       setSubmitting(true)
       const created = await createComment(post.id, text)
       setComments(prev => [...prev, created])
       setCommentInput('')
-    } catch {
-      // silent fail
+    } catch (e) {
+      setCommentError(e.message || '댓글 작성에 실패했습니다.')
     } finally {
       setSubmitting(false)
     }
   }
 
   async function handleDeleteComment(commentId) {
+    setCommentError('')
     try {
       await removeComment(commentId)
       setComments(prev => prev.filter(c => c.id !== commentId))
-    } catch {
-      // silent fail
+    } catch (e) {
+      setCommentError(e.message || '댓글 삭제에 실패했습니다.')
     }
   }
 
@@ -212,6 +215,9 @@ export default function DetailModal({ post, onClose, onJoin, currentMemberId }) 
             )}
           </div>
 
+          {commentError && (
+            <div style={styles.commentErrorMsg}>{commentError}</div>
+          )}
           <div style={styles.commentInputRow}>
             <input
               style={styles.commentInput}
@@ -474,6 +480,14 @@ const styles = {
     background: 'var(--border)',
     color: 'var(--text-muted)',
     cursor: 'not-allowed',
+  },
+  commentErrorMsg: {
+    fontSize: '0.78rem',
+    color: 'var(--accent3, #c0392b)',
+    background: 'rgba(192,57,43,0.06)',
+    borderRadius: 6,
+    padding: '0.4rem 0.7rem',
+    marginBottom: '0.5rem',
   },
   joinBtn: {
     width: '100%',

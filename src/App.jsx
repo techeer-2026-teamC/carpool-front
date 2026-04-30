@@ -45,6 +45,7 @@ export default function App() {
     posts,
     filteredPosts,
     myPosts,
+    filteredMyPosts,
     loading,
     currentPage, setCurrentPage,
     currentView, setCurrentView,
@@ -180,13 +181,13 @@ export default function App() {
               </div>
             </div>
             <div style={styles.cardsGrid}>
-              {myPosts.length === 0 ? (
+              {filteredMyPosts.length === 0 ? (
                 <div style={styles.emptyState}>
                   <div style={{ fontSize: '2.5rem', marginBottom: '1rem', opacity: 0.4 }}>📝</div>
-                  <p>등록한 카풀이 없습니다</p>
+                  <p>{myPosts.length === 0 ? '등록한 카풀이 없습니다' : '조건에 맞는 카풀이 없습니다'}</p>
                 </div>
               ) : (
-                myPosts.map(p => (
+                filteredMyPosts.map(p => (
                   <CarpoolCard
                     key={p.id}
                     post={p}

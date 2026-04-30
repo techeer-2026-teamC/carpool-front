@@ -78,6 +78,14 @@ export function useCarpool(memberId) {
 
   const myPosts = useMemo(() => posts.filter(p => p.isMe), [posts])
 
+  const filteredMyPosts = useMemo(() => {
+    let f = myPosts
+    if (searchQuery.from) f = f.filter(p => p.from.includes(searchQuery.from) || p.to.includes(searchQuery.from))
+    if (searchQuery.to)   f = f.filter(p => p.to.includes(searchQuery.to) || p.from.includes(searchQuery.to))
+    if (searchQuery.date) f = f.filter(p => p.date === searchQuery.date)
+    return f
+  }, [myPosts, searchQuery])
+
   const toggleTagFilter = useCallback((id) => {
     setSelectedTagFilters(prev => {
       const next = new Set(prev)
@@ -135,6 +143,7 @@ export function useCarpool(memberId) {
     posts,
     filteredPosts,
     myPosts,
+    filteredMyPosts,
     loading,
     currentPage, setCurrentPage,
     currentView, setCurrentView,

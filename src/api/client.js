@@ -12,13 +12,18 @@ function clearToken() {
   localStorage.removeItem('accessToken')
 }
 
-let isRefreshing = false
+let refreshPromise = null
 
 async function tryRefresh() {
-  const res = await fetch(`${BASE}/auth/refresh`, { method: 'POST' })
-  if (!res.ok) throw new Error('refresh failed')
-  const body = await res.json()
-  setToken(body.data.accessToken)
+  if (refreshPromise) return refreshPromise
+  refreshPromise = fetch(`${BASE}/auth/refresh`, { method: 'POST', credentials: 'include' })
+    .then(res => {
+      if (!res.ok) throw new Error('refresh failed')
+      return res.json()
+    })
+    .then(body => setToken(body.data.accessToken))
+    .finally(() => { refreshPromise = null })
+  return refreshPromise
 }
 
 async function request(path, options = {}, retry = true) {
@@ -30,14 +35,11 @@ async function request(path, options = {}, retry = true) {
   }
   const res = await fetch(`${BASE}${path}`, { ...options, headers })
 
-  if (res.status === 401 && retry && !isRefreshing) {
-    isRefreshing = true
+  if (res.status === 401 && retry) {
     try {
       await tryRefresh()
-      isRefreshing = false
       return request(path, options, false)
     } catch {
-      isRefreshing = false
       clearToken()
       window.location.reload()
       return
