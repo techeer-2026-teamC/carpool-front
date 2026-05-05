@@ -1,7 +1,7 @@
-import React, { useState } from 'react'
+import React, { useState, useRef, useCallback } from 'react'
 import { ALL_TAGS } from '../data/tags'
-import { LOCATION_COORDS } from '../data/mockData'
 import { useIsMobile } from '../hooks/useMobile'
+import { searchPlace } from '../api/kakao'
 
 export default function PostModal({ onClose, onSubmit }) {
   const isMobile = useIsMobile()
@@ -9,6 +9,8 @@ export default function PostModal({ onClose, onSubmit }) {
   const [form, setForm] = useState({
     from: '', to: '', date: today, time: '',
     seats: '2', price: '', desc: '',
+    departureLat: null, departureLng: null,
+    destinationLat: null, destinationLng: null,
   })
   const [selectedTags, setSelectedTags] = useState(new Set())
   const [error, setError] = useState('')
@@ -32,16 +34,10 @@ export default function PostModal({ onClose, onSubmit }) {
       return
     }
     setError('')
-    const fromCoords = LOCATION_COORDS[form.from] || null
-    const toCoords = LOCATION_COORDS[form.to] || null
     onSubmit({
       ...form,
       seats: Number(form.seats),
       tags: [...selectedTags],
-      departureLat: fromCoords ? fromCoords[0] : null,
-      departureLng: fromCoords ? fromCoords[1] : null,
-      destinationLat: toCoords ? toCoords[0] : null,
-      destinationLng: toCoords ? toCoords[1] : null,
     })
     onClose()
   }
@@ -69,10 +65,20 @@ export default function PostModal({ onClose, onSubmit }) {
 
         <div style={styles.formRow}>
           <FormGroup label="출발지 *">
-            <input style={styles.input} value={form.from} onChange={e => set('from', e.target.value)} placeholder="예: 강남역 3번 출구" />
+            <LocationInput
+              value={form.from}
+              placeholder="예: 강남역 3번 출구"
+              onSelect={({ name, lat, lng }) => setForm(f => ({ ...f, from: name, departureLat: lat, departureLng: lng }))}
+              onChange={val => setForm(f => ({ ...f, from: val, departureLat: null, departureLng: null }))}
+            />
           </FormGroup>
           <FormGroup label="목적지 *">
-            <input style={styles.input} value={form.to} onChange={e => set('to', e.target.value)} placeholder="예: 판교역 2번 출구" />
+            <LocationInput
+              value={form.to}
+              placeholder="예: 판교역 2번 출구"
+              onSelect={({ name, lat, lng }) => setForm(f => ({ ...f, to: name, destinationLat: lat, destinationLng: lng }))}
+              onChange={val => setForm(f => ({ ...f, to: val, destinationLat: null, destinationLng: null }))}
+            />
           </FormGroup>
         </div>
 
@@ -141,6 +147,103 @@ export default function PostModal({ onClose, onSubmit }) {
       </div>
     </div>
   )
+}
+
+function LocationInput({ value, placeholder, onSelect, onChange }) {
+  const [suggestions, setSuggestions] = useState([])
+  const [open, setOpen] = useState(false)
+  const timer = useRef(null)
+
+  const handleChange = useCallback((e) => {
+    const val = e.target.value
+    onChange(val)
+    clearTimeout(timer.current)
+    if (!val.trim()) { setSuggestions([]); setOpen(false); return }
+    timer.current = setTimeout(async () => {
+      const results = await searchPlace(val)
+      setSuggestions(results)
+      setOpen(results.length > 0)
+    }, 300)
+  }, [onChange])
+
+  function handleSelect(doc) {
+    onSelect({ name: doc.place_name, lat: parseFloat(doc.y), lng: parseFloat(doc.x) })
+    setSuggestions([])
+    setOpen(false)
+  }
+
+  return (
+    <div style={{ position: 'relative' }}>
+      <input
+        style={styles.input}
+        value={value}
+        onChange={handleChange}
+        placeholder={placeholder}
+        onBlur={() => setTimeout(() => setOpen(false), 150)}
+        onFocus={() => suggestions.length > 0 && setOpen(true)}
+        autoComplete="off"
+      />
+      {open && (
+        <ul style={locStyles.dropdown}>
+          {suggestions.map((doc, i) => (
+            <HoverItem key={i} onMouseDown={() => handleSelect(doc)}>
+              <div style={locStyles.placeName}>{doc.place_name}</div>
+              <div style={locStyles.address}>{doc.road_address_name || doc.address_name}</div>
+            </HoverItem>
+          ))}
+        </ul>
+      )}
+    </div>
+  )
+}
+
+function HoverItem({ children, onMouseDown }) {
+  const [hovered, setHovered] = useState(false)
+  return (
+    <li
+      style={{ ...locStyles.item, background: hovered ? 'var(--surface2)' : 'transparent' }}
+      onMouseDown={onMouseDown}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+    >
+      {children}
+    </li>
+  )
+}
+
+const locStyles = {
+  dropdown: {
+    position: 'absolute',
+    top: 'calc(100% + 4px)',
+    left: 0,
+    right: 0,
+    background: 'var(--surface)',
+    border: '1px solid var(--border)',
+    borderRadius: 10,
+    boxShadow: '0 8px 24px rgba(0,0,0,0.12)',
+    zIndex: 700,
+    listStyle: 'none',
+    margin: 0,
+    padding: '0.3rem 0',
+    maxHeight: 220,
+    overflowY: 'auto',
+  },
+  item: {
+    padding: '0.55rem 0.9rem',
+    cursor: 'pointer',
+    borderBottom: '1px solid var(--border)',
+    transition: 'background 0.15s',
+  },
+  placeName: {
+    fontSize: '0.88rem',
+    fontWeight: 600,
+    color: 'var(--text)',
+    marginBottom: '0.15rem',
+  },
+  address: {
+    fontSize: '0.74rem',
+    color: 'var(--text-muted)',
+  },
 }
 
 function FormGroup({ label, children }) {

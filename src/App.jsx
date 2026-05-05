@@ -14,6 +14,117 @@ import RidePage from './components/RidePage'
 import Toast from './components/Toast'
 import { useCarpool } from './hooks/useCarpool'
 import { logout } from './api/auth'
+import { getMyApplications } from './api/applications'
+
+const STATUS_MAP = {
+  PENDING:  { label: '대기 중', color: '#b8860b',         bg: 'rgba(184,134,11,0.1)' },
+  ACCEPTED: { label: '수락됨', color: 'var(--accent)',    bg: 'var(--accent-pale)' },
+  REJECTED: { label: '거절됨', color: 'var(--accent3)',   bg: 'rgba(192,57,43,0.1)' },
+}
+
+function ApplicationCard({ app, post, onOpen }) {
+  const s = STATUS_MAP[app.status] || STATUS_MAP.PENDING
+  const [hovered, setHovered] = useState(false)
+  return (
+    <div
+      style={{ ...appCardStyles.card, ...(hovered ? appCardStyles.cardHovered : {}) }}
+      onClick={() => post && onOpen(post.id)}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+    >
+      <div style={{ ...appCardStyles.topBar, opacity: hovered ? 1 : 0 }} />
+      <div style={appCardStyles.header}>
+        {post ? (
+          <div style={appCardStyles.route}>
+            <span>{post.from}</span>
+            <span style={{ color: 'var(--accent)' }}>→</span>
+            <span>{post.to}</span>
+          </div>
+        ) : (
+          <div style={appCardStyles.route}>게시글 #{app.postId}</div>
+        )}
+        <span style={{ ...appCardStyles.badge, color: s.color, background: s.bg }}>{s.label}</span>
+      </div>
+      {post && (
+        <div style={appCardStyles.meta}>
+          <span style={appCardStyles.metaItem}>📅 {post.date}</span>
+          <span style={appCardStyles.metaItem}>⏰ {post.time}</span>
+          <span style={appCardStyles.metaItem}>👥 {post.filled}/{post.seats}명</span>
+        </div>
+      )}
+      <div style={appCardStyles.appliedDate}>
+        신청일: {new Date(app.createdAt).toLocaleDateString('ko-KR')}
+      </div>
+    </div>
+  )
+}
+
+const appCardStyles = {
+  card: {
+    background: 'var(--surface)',
+    border: '1px solid var(--border)',
+    borderRadius: 16,
+    padding: '1.3rem',
+    cursor: 'pointer',
+    transition: 'box-shadow 0.25s, border-color 0.25s, transform 0.2s',
+    boxShadow: 'var(--card-glow)',
+    position: 'relative',
+    overflow: 'hidden',
+  },
+  cardHovered: {
+    borderColor: 'var(--accent)',
+    boxShadow: '0 8px 32px rgba(107, 124, 63, 0.18)',
+    transform: 'translateY(-2px)',
+  },
+  topBar: {
+    position: 'absolute',
+    top: 0, left: 0, right: 0,
+    height: 3,
+    background: 'var(--accent)',
+    transition: 'opacity 0.25s',
+  },
+  header: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: '0.9rem',
+  },
+  route: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '0.5rem',
+    fontWeight: 700,
+    fontSize: '0.98rem',
+    color: 'var(--text)',
+  },
+  badge: {
+    fontSize: '0.68rem',
+    fontWeight: 700,
+    padding: '0.22rem 0.55rem',
+    borderRadius: 6,
+    fontFamily: "'Space Mono', monospace",
+    whiteSpace: 'nowrap',
+  },
+  meta: {
+    display: 'flex',
+    gap: '0.9rem',
+    marginBottom: '0.8rem',
+    flexWrap: 'wrap',
+  },
+  metaItem: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '0.3rem',
+    fontSize: '0.8rem',
+    color: 'var(--text-muted)',
+  },
+  appliedDate: {
+    fontSize: '0.78rem',
+    color: 'var(--text-muted)',
+    paddingTop: '0.85rem',
+    borderTop: '1px solid var(--border)',
+  },
+}
 
 function parseMemberId(token) {
   try {
@@ -85,6 +196,18 @@ export default function App() {
 
   const [showPostModal, setShowPostModal] = useState(false)
   const [selectedPostId, setSelectedPostId] = useState(null)
+  const [myTab, setMyTab] = useState('registered')
+  const [myApplications, setMyApplications] = useState([])
+  const [appLoading, setAppLoading] = useState(false)
+
+  useEffect(() => {
+    if (myTab !== 'applied' || !auth.token) return
+    setAppLoading(true)
+    getMyApplications()
+      .then(data => setMyApplications(Array.isArray(data) ? data : []))
+      .catch(() => setMyApplications([]))
+      .finally(() => setAppLoading(false))
+  }, [myTab, auth.token])
 
   const selectedPost = posts.find(p => p.id === selectedPostId) || null
 
@@ -196,29 +319,67 @@ export default function App() {
         {currentPage === 'my' && (
           <>
             <div style={styles.toolbar}>
-              <div style={styles.sectionTitle}>
-                <div style={styles.dot} />
-                내가 등록한 카풀
+              <div style={styles.tabRow}>
+                <button
+                  style={{ ...styles.tab, ...(myTab === 'registered' ? styles.tabActive : {}) }}
+                  onClick={() => setMyTab('registered')}
+                >
+                  내가 등록한 카풀
+                </button>
+                <button
+                  style={{ ...styles.tab, ...(myTab === 'applied' ? styles.tabActive : {}) }}
+                  onClick={() => setMyTab('applied')}
+                >
+                  내가 신청한 카풀
+                </button>
               </div>
             </div>
-            <div style={styles.cardsGrid}>
-              {filteredMyPosts.length === 0 ? (
-                <div style={styles.emptyState}>
-                  <div style={{ fontSize: '2.5rem', marginBottom: '1rem', opacity: 0.4 }}>📝</div>
-                  <p>{myPosts.length === 0 ? '등록한 카풀이 없습니다' : '조건에 맞는 카풀이 없습니다'}</p>
-                </div>
-              ) : (
-                filteredMyPosts.map(p => (
-                  <CarpoolCard
-                    key={p.id}
-                    post={p}
-                    onOpen={handleOpenDetail}
-                    onDelete={deletePost}
-                    showDelete
-                  />
-                ))
-              )}
-            </div>
+
+            {myTab === 'registered' && (
+              <div style={styles.cardsGrid}>
+                {filteredMyPosts.length === 0 ? (
+                  <div style={styles.emptyState}>
+                    <div style={{ fontSize: '2.5rem', marginBottom: '1rem', opacity: 0.4 }}>📝</div>
+                    <p>{myPosts.length === 0 ? '등록한 카풀이 없습니다' : '조건에 맞는 카풀이 없습니다'}</p>
+                  </div>
+                ) : (
+                  filteredMyPosts.map(p => (
+                    <CarpoolCard
+                      key={p.id}
+                      post={p}
+                      onOpen={handleOpenDetail}
+                      onDelete={deletePost}
+                      showDelete
+                    />
+                  ))
+                )}
+              </div>
+            )}
+
+            {myTab === 'applied' && (
+              <div style={styles.cardsGrid}>
+                {appLoading ? (
+                  <div style={styles.emptyState}>
+                    <div style={{ fontSize: '2.5rem', marginBottom: '1rem', opacity: 0.4 }}>🚗</div>
+                    <p>불러오는 중...</p>
+                  </div>
+                ) : myApplications.length === 0 ? (
+                  <div style={styles.emptyState}>
+                    <div style={{ fontSize: '2.5rem', marginBottom: '1rem', opacity: 0.4 }}>📋</div>
+                    <p>신청한 카풀이 없습니다</p>
+                  </div>
+                ) : (
+                  myApplications.map(app => (
+                    <ApplicationCard
+                      key={app.id}
+                      app={app}
+                      post={posts.find(p => p.id === app.postId) || null}
+                      onOpen={handleOpenDetail}
+                    />
+                  ))
+                )}
+              </div>
+            )}
           </>
         )}
 
@@ -341,6 +502,31 @@ const styles = {
     transition: 'all 0.2s',
   },
   viewBtnActive: {
+    background: 'var(--surface)',
+    color: 'var(--accent)',
+    boxShadow: '0 1px 4px rgba(0,0,0,0.1)',
+  },
+  tabRow: {
+    display: 'flex',
+    gap: '0.35rem',
+    background: 'var(--surface2)',
+    border: '1px solid var(--border)',
+    borderRadius: 10,
+    padding: 3,
+  },
+  tab: {
+    background: 'none',
+    border: 'none',
+    cursor: 'pointer',
+    padding: '0.45rem 1.1rem',
+    borderRadius: 7,
+    fontSize: '0.85rem',
+    fontWeight: 600,
+    color: 'var(--text-muted)',
+    transition: 'all 0.2s',
+    whiteSpace: 'nowrap',
+  },
+  tabActive: {
     background: 'var(--surface)',
     color: 'var(--accent)',
     boxShadow: '0 1px 4px rgba(0,0,0,0.1)',

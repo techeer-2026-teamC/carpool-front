@@ -1,12 +1,9 @@
-import React, { useEffect, useRef, useState } from 'react'
+import React, { useEffect, useRef, useState, useCallback } from 'react'
 import { fmtDate, fmtPrice } from './CarpoolCard'
 
 const KAKAO_JS_KEY = import.meta.env.VITE_KAKAO_JS_KEY
-const SW = { lat: 36.8, lng: 126.4 }
-const NE = { lat: 38.1, lng: 128.0 }
 
 let sdkPromise = null
-
 function loadSDK() {
   if (sdkPromise) return sdkPromise
   sdkPromise = new Promise((resolve, reject) => {
@@ -20,17 +17,64 @@ function loadSDK() {
   return sdkPromise
 }
 
+function makeDepMarkerEl(post, selected) {
+  const avail = post.seats - post.filled
+  const full = avail <= 0
+  const col = selected ? '#3d5a1a' : (full ? '#c0392b' : (post.color || '#6b7c3f'))
+  const size = selected ? 50 : 42
+  const label = full ? '✕' : avail + '석'
+  const div = document.createElement('div')
+  div.innerHTML = `
+    <div style="
+      width:${size}px;height:${size}px;
+      border-radius:50% 50% 50% 5px;
+      transform:rotate(-45deg);
+      background:${col};
+      border:${selected ? '3px' : '2.5px'} solid white;
+      box-shadow:${selected ? '0 4px 20px rgba(0,0,0,0.4)' : '0 3px 14px rgba(0,0,0,0.25)'};
+      display:flex;align-items:center;justify-content:center;cursor:pointer;
+      transition:all 0.2s;
+    ">
+      <span style="transform:rotate(45deg);font-size:0.55rem;font-weight:900;color:white;font-family:'Space Mono',monospace;text-align:center;line-height:1.1;">
+        ${label}
+      </span>
+    </div>
+  `
+  return div
+}
+
+function makeDestMarkerEl() {
+  const div = document.createElement('div')
+  div.innerHTML = `
+    <div style="display:flex;flex-direction:column;align-items:center;gap:2px;">
+      <div style="
+        width:36px;height:36px;
+        border-radius:50% 50% 50% 5px;
+        transform:rotate(-45deg);
+        background:#e67e22;
+        border:2.5px solid white;
+        box-shadow:0 3px 14px rgba(0,0,0,0.3);
+        display:flex;align-items:center;justify-content:center;
+      ">
+        <span style="transform:rotate(45deg);font-size:0.8rem;">도</span>
+      </div>
+    </div>
+  `
+  return div
+}
+
 export default function MapView({ posts, onOpenDetail }) {
   const mapRef = useRef(null)
   const mapInstanceRef = useRef(null)
-  const overlaysRef = useRef([])
+  const depOverlaysRef = useRef([])   // 출발지 마커들
+  const destOverlayRef = useRef(null) // 선택된 도착지 마커
+  const routeLineRef = useRef(null)   // 경로 라인
   const [sdkReady, setSdkReady] = useState(false)
   const [error, setError] = useState(null)
+  const [selectedId, setSelectedId] = useState(null)
+  const [sidebarOpen, setSidebarOpen] = useState(true)
 
-  useEffect(() => {
-    window.__openDetail = onOpenDetail
-    return () => { delete window.__openDetail }
-  }, [onOpenDetail])
+  const selectedPost = posts.find(p => p.id === selectedId) || null
 
   // SDK 로드
   useEffect(() => {
@@ -39,131 +83,197 @@ export default function MapView({ posts, onOpenDetail }) {
       .catch(e => setError(e.message))
   }, [])
 
-  // 지도 초기화 (SDK 준비 + DOM 준비 후)
+  // 지도 초기화
   useEffect(() => {
     if (!sdkReady || !mapRef.current) return
-
     const kakao = window.kakao
     const map = new kakao.maps.Map(mapRef.current, {
-      center: new kakao.maps.LatLng(37.5326, 127.0246),
-      level: 8,
+      center: new kakao.maps.LatLng(37.5665, 126.9780),
+      level: 10,
+      maxLevel: 10,
     })
     mapInstanceRef.current = map
-
-    kakao.maps.event.addListener(map, 'center_changed', () => {
-      const c = map.getCenter()
-      const lat = Math.max(SW.lat, Math.min(NE.lat, c.getLat()))
-      const lng = Math.max(SW.lng, Math.min(NE.lng, c.getLng()))
-      if (lat !== c.getLat() || lng !== c.getLng()) {
-        map.setCenter(new kakao.maps.LatLng(lat, lng))
-      }
-    })
-
-    return () => {
-      mapInstanceRef.current = null
-    }
+    return () => { mapInstanceRef.current = null }
   }, [sdkReady])
 
-  // 마커 렌더링
+  // 출발지 마커 렌더링 (posts 또는 selectedId 변경 시)
   useEffect(() => {
     const map = mapInstanceRef.current
-    if (!map) return
-
+    if (!map || !sdkReady) return
     const kakao = window.kakao
-    overlaysRef.current.forEach(o => o.setMap(null))
-    overlaysRef.current = []
+
+    depOverlaysRef.current.forEach(o => o.setMap(null))
+    depOverlaysRef.current = []
 
     posts.forEach(p => {
       if (p.departureLat == null || p.departureLng == null) return
-
-      const avail = p.seats - p.filled
-      const full = avail <= 0
-      const col = full ? '#c0392b' : (p.color || '#6b7c3f')
-
-      const el = document.createElement('div')
-      el.innerHTML = `
-        <div style="width:42px;height:42px;border-radius:50% 50% 50% 5px;transform:rotate(-45deg);background:${col};border:2.5px solid white;box-shadow:0 3px 14px rgba(0,0,0,0.25);display:flex;align-items:center;justify-content:center;cursor:pointer;">
-          <span style="transform:rotate(45deg);font-size:0.55rem;font-weight:900;color:white;font-family:'Space Mono',monospace;text-align:center;line-height:1.1;">${full ? '✕' : avail + '석'}</span>
-        </div>
-      `
-      el.addEventListener('click', () => onOpenDetail(String(p.id)))
-
+      const el = makeDepMarkerEl(p, p.id === selectedId)
+      el.addEventListener('click', () => setSelectedId(prev => prev === p.id ? null : p.id))
       const overlay = new kakao.maps.CustomOverlay({
         position: new kakao.maps.LatLng(p.departureLat, p.departureLng),
         content: el,
         yAnchor: 1,
-        zIndex: 3,
+        zIndex: p.id === selectedId ? 5 : 3,
       })
       overlay.setMap(map)
-      overlaysRef.current.push(overlay)
+      depOverlaysRef.current.push(overlay)
     })
+  }, [sdkReady, posts, selectedId])
 
-    const toSeen = new Set()
-    posts.forEach(p => {
-      if (p.destinationLat == null || p.destinationLng == null) return
-      if (toSeen.has(p.to)) return
-      toSeen.add(p.to)
+  // 경로 라인 + 도착지 마커 (selectedId 변경 시)
+  useEffect(() => {
+    const map = mapInstanceRef.current
+    if (!map || !sdkReady) return
+    const kakao = window.kakao
 
-      const dot = document.createElement('div')
-      dot.innerHTML = `<div style="width:13px;height:13px;border-radius:50%;background:#fff;border:2.5px solid #6b7c3f;box-shadow:0 1px 6px rgba(0,0,0,0.18);"></div>`
+    // 기존 제거
+    if (routeLineRef.current) { routeLineRef.current.setMap(null); routeLineRef.current = null }
+    if (destOverlayRef.current) { destOverlayRef.current.setMap(null); destOverlayRef.current = null }
 
-      const overlay = new kakao.maps.CustomOverlay({
-        position: new kakao.maps.LatLng(p.destinationLat, p.destinationLng),
-        content: dot,
-        zIndex: 1,
-      })
-      overlay.setMap(map)
-      overlaysRef.current.push(overlay)
+    if (!selectedPost) return
+    const { departureLat, departureLng, destinationLat, destinationLng } = selectedPost
+    if (departureLat == null || destinationLat == null) return
+
+    // 경로 라인
+    const line = new kakao.maps.Polyline({
+      path: [
+        new kakao.maps.LatLng(departureLat, departureLng),
+        new kakao.maps.LatLng(destinationLat, destinationLng),
+      ],
+      strokeWeight: 4,
+      strokeColor: '#6b7c3f',
+      strokeOpacity: 0.85,
+      strokeStyle: 'dashed',
     })
-  }, [sdkReady, posts, onOpenDetail])
+    line.setMap(map)
+    routeLineRef.current = line
+
+    // 도착지 마커
+    const destEl = makeDestMarkerEl()
+    const destOverlay = new kakao.maps.CustomOverlay({
+      position: new kakao.maps.LatLng(destinationLat, destinationLng),
+      content: destEl,
+      yAnchor: 1,
+      zIndex: 4,
+    })
+    destOverlay.setMap(map)
+    destOverlayRef.current = destOverlay
+
+    // 지도 범위를 출발지-도착지에 맞게 조정
+    const bounds = new kakao.maps.LatLngBounds()
+    bounds.extend(new kakao.maps.LatLng(departureLat, departureLng))
+    bounds.extend(new kakao.maps.LatLng(destinationLat, destinationLng))
+    map.setBounds(bounds, 120)
+  }, [sdkReady, selectedId, selectedPost])
+
+  const handleSelectFromSidebar = useCallback((id) => {
+    setSelectedId(prev => prev === id ? null : id)
+  }, [])
 
   return (
     <div style={styles.container}>
       <div ref={mapRef} style={styles.map}>
-        {!sdkReady && !error && (
-          <div style={styles.loadingOverlay}>지도 불러오는 중...</div>
-        )}
-        {error && (
-          <div style={styles.loadingOverlay}>⚠️ {error}</div>
-        )}
+        {!sdkReady && !error && <div style={styles.loadingOverlay}>지도 불러오는 중...</div>}
+        {error && <div style={styles.loadingOverlay}>⚠️ {error}</div>}
       </div>
-      <div style={styles.sidebar}>
-        <div style={styles.sidebarInner}>
-          <div style={styles.sidebarHeader}>총 {posts.length}개 카풀</div>
-          <div>
-            {posts.map(p => {
-              const avail = p.seats - p.filled
-              return (
-                <div key={p.id} style={styles.mapCard} onClick={() => onOpenDetail(p.id)}>
-                  <div style={styles.mapRoute}>
+
+      {/* 우측 사이드바 */}
+      <div style={{ ...styles.sidebar, width: sidebarOpen ? 280 : 0 }}>
+        <button
+          style={{ ...styles.sidebarToggle, right: sidebarOpen ? 288 : 8 }}
+          onClick={() => setSidebarOpen(o => !o)}
+          title={sidebarOpen ? '목록 접기' : '목록 펼치기'}
+        >
+          {sidebarOpen ? '▶' : '◀'}<br />
+          <span style={{ fontSize: '0.6rem', letterSpacing: 0 }}>목록</span>
+        </button>
+        <div style={{ ...styles.sidebarInner, opacity: sidebarOpen ? 1 : 0, pointerEvents: sidebarOpen ? 'auto' : 'none', transition: 'opacity 0.2s' }}>
+          <div style={styles.sidebarHeader}>카풀 목록 ({posts.length})</div>
+          {posts.map(p => {
+            const avail = p.seats - p.filled
+            const isSel = p.id === selectedId
+            return (
+              <div
+                key={p.id}
+                style={{ ...styles.mapCard, ...(isSel ? styles.mapCardSelected : {}) }}
+                onClick={() => handleSelectFromSidebar(p.id)}
+              >
+                <div style={styles.mapRoute}>
+                  <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                     {p.from}
-                    <span style={{ color: 'var(--accent)', margin: '0 3px' }}>→</span>
+                    <span style={{ color: 'var(--accent)', margin: '0 4px' }}>→</span>
                     {p.to}
-                    <span style={{ ...styles.badge, ...(avail <= 0 ? styles.badgeFull : styles.badgeSeats), marginLeft: 'auto' }}>
-                      {avail <= 0 ? '마감' : `${avail}석`}
-                    </span>
-                  </div>
-                  <div style={styles.mapMeta}>
-                    <span>📅 {fmtDate(p.date)}</span>
-                    <span>⏰ {p.time}</span>
-                    <span style={styles.mapPrice}>{fmtPrice(p.price)}</span>
-                  </div>
+                  </span>
+                  <span style={{ ...styles.badge, ...(avail <= 0 ? styles.badgeFull : styles.badgeSeats) }}>
+                    {avail <= 0 ? '마감' : `${avail}석`}
+                  </span>
                 </div>
-              )
-            })}
+                <div style={styles.mapMeta}>
+                  <span>📅 {fmtDate(p.date)}</span>
+                  <span>⏰ {p.time}</span>
+                  <span style={styles.mapPrice}>{fmtPrice(p.price)}</span>
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      </div>
+
+      {/* 하단 플로팅 카드 (선택된 게시글) */}
+      {selectedPost && (
+        <div style={{ ...styles.infoCard, right: sidebarOpen ? 308 : 16 }}>
+          <div style={styles.infoCardInner}>
+            <div style={styles.infoRoute}>
+              <div style={styles.infoRoutePoint}>
+                <div style={{ ...styles.routeDot, background: 'var(--accent)' }} />
+                <span style={styles.infoRouteText}>{selectedPost.from}</span>
+              </div>
+              <div style={styles.routeLine} />
+              <div style={styles.infoRoutePoint}>
+                <div style={{ ...styles.routeDot, background: '#e67e22' }} />
+                <span style={styles.infoRouteText}>{selectedPost.to}</span>
+              </div>
+            </div>
+            <div style={styles.infoDivider} />
+            <div style={styles.infoMeta}>
+              <span style={styles.infoMetaItem}>📅 {selectedPost.date}</span>
+              <span style={styles.infoMetaItem}>⏰ {selectedPost.time}</span>
+              <span style={styles.infoMetaItem}>👥 {selectedPost.filled}/{selectedPost.seats}명</span>
+              <span style={{ ...styles.infoMetaItem, fontFamily: "'Space Mono',monospace", fontWeight: 700, color: 'var(--accent)' }}>
+                {fmtPrice(selectedPost.price)}
+              </span>
+            </div>
+            <div style={styles.infoActions}>
+              <div style={styles.infoNickname}>
+                <div style={{ ...styles.infoAvatar, background: `${selectedPost.color}22`, color: selectedPost.color }}>
+                  {(selectedPost.nickname || '?')[0]}
+                </div>
+                <span style={styles.infoNicknameText}>{selectedPost.nickname}</span>
+              </div>
+              <div style={styles.infoBtns}>
+                <button style={styles.btnClose} onClick={() => setSelectedId(null)}>✕</button>
+                <button style={styles.btnDetail} onClick={() => onOpenDetail(selectedPost.id)}>
+                  상세보기
+                </button>
+              </div>
+            </div>
           </div>
         </div>
-      </div>
-      <div style={styles.legend}>
-        <div style={styles.legendItem}>
-          <div style={{ width:14, height:14, borderRadius:'50% 50% 50% 3px', transform:'rotate(-45deg)', background:'var(--accent)', border:'2px solid white', boxShadow:'0 1px 4px rgba(0,0,0,0.2)' }} />
-          출발지
+      )}
+
+      {/* 범례 */}
+      {!selectedPost && (
+        <div style={styles.legend}>
+          <div style={styles.legendItem}>
+            <div style={{ width: 12, height: 12, borderRadius: '50% 50% 50% 3px', transform: 'rotate(-45deg)', background: 'var(--accent)', border: '2px solid white', boxShadow: '0 1px 4px rgba(0,0,0,0.2)' }} />
+            출발지
+          </div>
+          <div style={styles.legendItem}>
+            <div style={{ width: 12, height: 12, borderRadius: '50% 50% 50% 3px', transform: 'rotate(-45deg)', background: '#e67e22', border: '2px solid white', boxShadow: '0 1px 4px rgba(0,0,0,0.2)' }} />
+            도착지
+          </div>
         </div>
-        <div style={styles.legendItem}>
-          <div style={{ width:12, height:12, borderRadius:'50%', background:'#fff', border:'2.5px solid var(--accent)' }} />
-          목적지
-        </div>
-      </div>
+      )}
     </div>
   )
 }
@@ -198,10 +308,30 @@ const styles = {
     top: 12,
     right: 12,
     bottom: 12,
-    width: 300,
     zIndex: 400,
+    transition: 'width 0.25s cubic-bezier(0.4,0,0.2,1)',
+    overflow: 'visible',
+  },
+  sidebarToggle: {
+    position: 'absolute',
+    top: '50%',
+    transform: 'translateY(-50%)',
+    zIndex: 410,
+    background: 'rgba(255,255,255,0.96)',
+    border: '1px solid var(--border)',
+    borderRadius: 10,
+    width: 28,
+    padding: '0.5rem 0.2rem',
+    cursor: 'pointer',
+    fontSize: '0.65rem',
+    fontWeight: 700,
+    color: 'var(--accent)',
+    boxShadow: '0 2px 10px rgba(0,0,0,0.12)',
     display: 'flex',
     flexDirection: 'column',
+    alignItems: 'center',
+    lineHeight: 1.4,
+    transition: 'right 0.25s cubic-bezier(0.4,0,0.2,1)',
   },
   sidebarInner: {
     background: 'rgba(255,255,255,0.96)',
@@ -209,7 +339,7 @@ const styles = {
     border: '1px solid var(--border)',
     borderRadius: 16,
     overflowY: 'auto',
-    flex: 1,
+    height: '100%',
     boxShadow: '0 4px 24px rgba(107,124,63,0.15)',
   },
   sidebarHeader: {
@@ -230,13 +360,18 @@ const styles = {
     padding: '0.85rem 1.1rem',
     borderBottom: '1px solid var(--border)',
     cursor: 'pointer',
+    transition: 'background 0.15s',
+  },
+  mapCardSelected: {
+    background: 'var(--accent-pale)',
+    borderLeft: '3px solid var(--accent)',
   },
   mapRoute: {
     display: 'flex',
     alignItems: 'center',
     gap: '0.35rem',
     fontWeight: 700,
-    fontSize: '0.85rem',
+    fontSize: '0.84rem',
     color: 'var(--text)',
     marginBottom: '0.35rem',
   },
@@ -246,6 +381,7 @@ const styles = {
     fontSize: '0.73rem',
     color: 'var(--text-muted)',
     alignItems: 'center',
+    flexWrap: 'wrap',
   },
   mapPrice: {
     fontFamily: "'Space Mono', monospace",
@@ -255,11 +391,12 @@ const styles = {
     marginLeft: 'auto',
   },
   badge: {
-    fontSize: '0.68rem',
+    fontSize: '0.65rem',
     fontWeight: 700,
-    padding: '0.22rem 0.55rem',
+    padding: '0.18rem 0.48rem',
     borderRadius: 6,
     fontFamily: "'Space Mono', monospace",
+    flexShrink: 0,
   },
   badgeSeats: {
     background: 'var(--accent-pale)',
@@ -269,6 +406,123 @@ const styles = {
     background: 'rgba(192,57,43,0.1)',
     color: 'var(--accent3)',
   },
+
+  /* 하단 플로팅 카드 */
+  infoCard: {
+    position: 'absolute',
+    bottom: 16,
+    left: 16,
+    right: 308,
+    zIndex: 450,
+    animation: 'cardUp 0.25s cubic-bezier(0.34,1.2,0.64,1) both',
+  },
+  infoCardInner: {
+    background: 'rgba(255,255,255,0.97)',
+    backdropFilter: 'blur(16px)',
+    border: '1px solid var(--border)',
+    borderRadius: 18,
+    padding: '1rem 1.2rem',
+    boxShadow: '0 8px 32px rgba(0,0,0,0.15)',
+  },
+  infoRoute: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '0.6rem',
+    marginBottom: '0.75rem',
+  },
+  infoRoutePoint: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '0.4rem',
+    flex: 1,
+    minWidth: 0,
+  },
+  routeDot: {
+    width: 10,
+    height: 10,
+    borderRadius: '50%',
+    flexShrink: 0,
+  },
+  infoRouteText: {
+    fontSize: '0.9rem',
+    fontWeight: 700,
+    color: 'var(--text)',
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+  },
+  routeLine: {
+    flex: '0 0 24px',
+    height: 2,
+    background: 'linear-gradient(to right, var(--accent), #e67e22)',
+    borderRadius: 2,
+  },
+  infoDivider: {
+    height: 1,
+    background: 'var(--border)',
+    margin: '0.65rem 0',
+  },
+  infoMeta: {
+    display: 'flex',
+    gap: '0.9rem',
+    flexWrap: 'wrap',
+    marginBottom: '0.75rem',
+  },
+  infoMetaItem: {
+    fontSize: '0.8rem',
+    color: 'var(--text-muted)',
+  },
+  infoActions: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  infoNickname: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '0.45rem',
+  },
+  infoAvatar: {
+    width: 26,
+    height: 26,
+    borderRadius: '50%',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    fontSize: '0.7rem',
+    fontWeight: 700,
+  },
+  infoNicknameText: {
+    fontSize: '0.83rem',
+    fontWeight: 500,
+    color: 'var(--text)',
+  },
+  infoBtns: {
+    display: 'flex',
+    gap: '0.5rem',
+    alignItems: 'center',
+  },
+  btnClose: {
+    background: 'var(--surface2)',
+    border: '1px solid var(--border)',
+    borderRadius: 8,
+    padding: '0.4rem 0.65rem',
+    cursor: 'pointer',
+    fontSize: '0.8rem',
+    color: 'var(--text-muted)',
+  },
+  btnDetail: {
+    background: 'var(--accent)',
+    color: '#fff',
+    border: 'none',
+    borderRadius: 8,
+    padding: '0.4rem 1rem',
+    cursor: 'pointer',
+    fontSize: '0.85rem',
+    fontWeight: 700,
+  },
+
+  /* 범례 */
   legend: {
     position: 'absolute',
     bottom: 20,

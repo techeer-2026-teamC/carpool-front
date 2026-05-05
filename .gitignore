@@ -16,6 +16,10 @@ yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
 
+# claude
+CLAUDE.md
+PROJECT_OVERVIEW.md
+
 # editor
 .vscode/
 .idea/
