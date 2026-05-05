@@ -1,5 +1,7 @@
 import React, { useEffect, useState } from 'react'
 import { getMyProfile, updateProfile, withdrawMember } from '../api/members'
+import { getMyDriver, registerDriver, updateDriver, deleteDriver } from '../api/drivers'
+import { getVehicleModels, getVehicleColors } from '../api/vehicles'
 
 export default function ProfilePage({ onLogout }) {
   const [profile, setProfile] = useState(null)
@@ -15,6 +17,93 @@ export default function ProfilePage({ onLogout }) {
 
   const [withdrawLoading, setWithdrawLoading] = useState(false)
   const [withdrawMsg, setWithdrawMsg] = useState(null)
+
+  // 드라이버 등록 상태
+  const [driver, setDriver] = useState(null)          // null: 미조회, false: 미등록, object: 등록됨
+  const [driverLoading, setDriverLoading] = useState(true)
+  const [driverMsg, setDriverMsg] = useState(null)
+  const [driverSubmitting, setDriverSubmitting] = useState(false)
+
+  const [models, setModels] = useState([])
+  const [brands, setBrands] = useState([])
+  const [selectedBrand, setSelectedBrand] = useState('')
+  const [selectedModel, setSelectedModel] = useState('')
+  const [colors, setColors] = useState([])
+  const [selectedColorId, setSelectedColorId] = useState('')
+  const [carNumber, setCarNumber] = useState('')
+
+  // 드라이버 정보 로드
+  useEffect(() => {
+    getMyDriver()
+      .then(d => {
+        setDriver(d)
+        setCarNumber(d.carNumber)
+      })
+      .catch(err => {
+        if (err.status === 404) setDriver(false)
+        else setDriver(false)
+      })
+      .finally(() => setDriverLoading(false))
+  }, [])
+
+  // 차량 모델 로드
+  useEffect(() => {
+    getVehicleModels().then(data => {
+      setModels(data)
+      const uniqueBrands = [...new Set(data.map(m => m.brand))]
+      setBrands(uniqueBrands)
+    }).catch(() => {})
+  }, [])
+
+  // 브랜드/모델 선택 시 색상 로드
+  useEffect(() => {
+    if (!selectedBrand || !selectedModel) { setColors([]); setSelectedColorId(''); return }
+    getVehicleColors(selectedBrand, selectedModel).then(data => {
+      setColors(data)
+      setSelectedColorId('')
+    }).catch(() => setColors([]))
+  }, [selectedBrand, selectedModel])
+
+  const modelsForBrand = models.filter(m => m.brand === selectedBrand)
+
+  async function handleDriverSubmit(e) {
+    e.preventDefault()
+    if (!selectedColorId || !carNumber.trim()) {
+      setDriverMsg({ ok: false, text: '차량 정보와 차량 번호를 모두 입력해주세요.' })
+      return
+    }
+    setDriverSubmitting(true)
+    setDriverMsg(null)
+    try {
+      const fn = driver ? updateDriver : registerDriver
+      const result = await fn(Number(selectedColorId), carNumber.trim())
+      setDriver(result)
+      setDriverMsg({ ok: true, text: driver ? '차량 정보가 수정되었습니다.' : '드라이버로 등록되었습니다.' })
+    } catch (err) {
+      setDriverMsg({ ok: false, text: err.message || '처리에 실패했습니다.' })
+    } finally {
+      setDriverSubmitting(false)
+    }
+  }
+
+  async function handleDriverDelete() {
+    if (!window.confirm('드라이버 등록을 취소하시겠습니까?')) return
+    setDriverSubmitting(true)
+    setDriverMsg(null)
+    try {
+      await deleteDriver()
+      setDriver(false)
+      setCarNumber('')
+      setSelectedBrand('')
+      setSelectedModel('')
+      setSelectedColorId('')
+      setDriverMsg({ ok: true, text: '드라이버 등록이 취소되었습니다.' })
+    } catch (err) {
+      setDriverMsg({ ok: false, text: err.message || '취소에 실패했습니다.' })
+    } finally {
+      setDriverSubmitting(false)
+    }
+  }
 
   useEffect(() => {
     getMyProfile()
@@ -178,16 +267,79 @@ export default function ProfilePage({ onLogout }) {
         )}
       </section>
 
-      {/* 차량 등록 (준비 중) */}
+      {/* 드라이버 등록 */}
       <section style={styles.card}>
         <div style={styles.cardHeader}>
           <div style={styles.dot} />
-          <h2 style={styles.cardTitle}>차량 등록 (드라이버 등록)</h2>
-          <span style={styles.badge}>준비 중</span>
+          <h2 style={styles.cardTitle}>드라이버 등록</h2>
+          {driver && <span style={{ ...styles.badge, background: 'rgba(39,174,96,0.1)', color: '#27ae60' }}>등록됨</span>}
         </div>
-        <div style={styles.infoBox}>
-          차량 등록 API (<code>POST /api/v1/vehicles</code>) 개발 후 활성화됩니다.
-        </div>
+        {driverLoading ? (
+          <div style={styles.infoBox}>불러오는 중...</div>
+        ) : (
+          <>
+            {driver && (
+              <div style={{ ...styles.infoBox, marginBottom: '1rem' }}>
+                현재 차량: <strong>{driver.brand} {driver.model}</strong> / {driver.colorLabel} / <strong>{driver.carNumber}</strong>
+              </div>
+            )}
+            <form onSubmit={handleDriverSubmit} style={styles.form}>
+              <select
+                style={styles.input}
+                value={selectedBrand}
+                onChange={e => { setSelectedBrand(e.target.value); setSelectedModel('') }}
+              >
+                <option value="">브랜드 선택</option>
+                {brands.map(b => <option key={b} value={b}>{b}</option>)}
+              </select>
+              <select
+                style={styles.input}
+                value={selectedModel}
+                onChange={e => setSelectedModel(e.target.value)}
+                disabled={!selectedBrand}
+              >
+                <option value="">모델 선택</option>
+                {modelsForBrand.map(m => <option key={m.model} value={m.model}>{m.model}</option>)}
+              </select>
+              <select
+                style={styles.input}
+                value={selectedColorId}
+                onChange={e => setSelectedColorId(e.target.value)}
+                disabled={!colors.length}
+              >
+                <option value="">색상 선택</option>
+                {colors.map(c => (
+                  <option key={c.vehicleOptionId} value={c.vehicleOptionId}>
+                    {c.colorLabel}
+                  </option>
+                ))}
+              </select>
+              <input
+                style={styles.input}
+                placeholder="차량 번호 (예: 12가3456)"
+                value={carNumber}
+                onChange={e => setCarNumber(e.target.value)}
+              />
+              <button style={styles.submitBtn} disabled={driverSubmitting}>
+                {driverSubmitting ? '처리 중...' : driver ? '차량 정보 수정' : '드라이버 등록'}
+              </button>
+            </form>
+            {driver && (
+              <button
+                style={{ ...styles.submitBtn, background: 'rgba(192,57,43,0.1)', color: 'var(--accent3, #c0392b)', marginTop: '0.5rem' }}
+                onClick={handleDriverDelete}
+                disabled={driverSubmitting}
+              >
+                드라이버 등록 취소
+              </button>
+            )}
+            {driverMsg && (
+              <div style={{ ...styles.msg, color: driverMsg.ok ? '#27ae60' : 'var(--accent3, #c0392b)' }}>
+                {driverMsg.text}
+              </div>
+            )}
+          </>
+        )}
       </section>
 
       {/* 회원 탈퇴 */}
