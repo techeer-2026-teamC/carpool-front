@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useCallback } from 'react'
-import { fetchPosts, createPost as apiCreatePost, removePost as apiRemovePost } from '../api/posts'
+import { fetchPosts, createPost as apiCreatePost, removePost as apiRemovePost, closePost as apiClosePost } from '../api/posts'
 import { applyPost } from '../api/applications'
 
 const COLORS = ['#6b7c3f', '#8a9e50', '#4a5a2a', '#a0845c', '#7a9a6b', '#5c7a4a']
@@ -144,6 +144,18 @@ export function useCarpool(memberId) {
     }
   }, [showToast])
 
+  const closePost = useCallback(async (id) => {
+    try {
+      const ride = await apiClosePost(id)
+      setPosts(prev => prev.map(p => p.id === id ? { ...p, status: 'CLOSED' } : p))
+      showToast('신청이 마감되었습니다. 운행 페이지에서 확인하세요!')
+      return ride
+    } catch (e) {
+      showToast(e.message || '신청 마감에 실패했습니다.')
+      return null
+    }
+  }, [showToast])
+
   return {
     posts,
     filteredPosts,
@@ -160,5 +172,6 @@ export function useCarpool(memberId) {
     addPost,
     deletePost,
     joinCarpool,
+    closePost,
   }
 }

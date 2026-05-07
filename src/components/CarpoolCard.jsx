@@ -37,9 +37,10 @@ function TagPill({ tagId, size = 'normal' }) {
 
 export { TagPill, fmtDate, fmtPrice }
 
-export default function CarpoolCard({ post, onOpen, onDelete, showDelete }) {
+export default function CarpoolCard({ post, onOpen, onDelete, onClose, showDelete, showClose }) {
   const avail = post.seats - post.filled
   const full = avail <= 0
+  const isClosed = post.status === 'CLOSED'
   const [hovered, setHovered] = useState(false)
 
   function handleClick() {
@@ -52,6 +53,7 @@ export default function CarpoolCard({ post, onOpen, onDelete, showDelete }) {
       style={{
         ...styles.card,
         ...(hovered ? styles.cardHovered : {}),
+        ...(isClosed ? { opacity: 0.8 } : {}),
       }}
       onClick={handleClick}
       onMouseEnter={() => setHovered(true)}
@@ -65,9 +67,17 @@ export default function CarpoolCard({ post, onOpen, onDelete, showDelete }) {
           <span>{post.to}</span>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-          <div style={{ ...styles.badge, ...(full ? styles.badgeFull : styles.badgeSeats) }}>
-            {full ? '마감' : `${avail}석 남음`}
+          <div style={{ ...styles.badge, ...(isClosed ? styles.badgeClosed : full ? styles.badgeFull : styles.badgeSeats) }}>
+            {isClosed ? '마감됨' : full ? '마감' : `${avail}석 남음`}
           </div>
+          {showClose && !isClosed && (
+            <button
+              style={styles.closeBtn}
+              onClick={e => { e.stopPropagation(); onClose(post.id) }}
+            >
+              신청 마감
+            </button>
+          )}
           {showDelete && (
             <button
               style={styles.deleteBtn}
@@ -165,6 +175,10 @@ const styles = {
     background: 'rgba(192,57,43,0.1)',
     color: 'var(--accent3)',
   },
+  badgeClosed: {
+    background: 'var(--surface2)',
+    color: 'var(--text-muted)',
+  },
   meta: {
     display: 'flex',
     gap: '0.9rem',
@@ -246,5 +260,16 @@ const styles = {
     cursor: 'pointer',
     fontSize: '0.75rem',
     whiteSpace: 'nowrap',
+  },
+  closeBtn: {
+    background: 'var(--accent-pale)',
+    color: 'var(--accent)',
+    border: '1px solid var(--accent)',
+    borderRadius: 6,
+    padding: '0.25rem 0.6rem',
+    cursor: 'pointer',
+    fontSize: '0.75rem',
+    whiteSpace: 'nowrap',
+    fontWeight: 700,
   },
 }

@@ -13,3 +13,8 @@ export async function createPost(payload) {
 export async function removePost(id) {
   return api.delete(`/posts/${id}`)
 }
+
+export async function closePost(id) {
+  const res = await api.post(`/posts/${id}/close`)
+  return res.data
+}

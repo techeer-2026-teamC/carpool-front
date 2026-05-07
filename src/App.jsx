@@ -192,6 +192,7 @@ export default function App() {
     addPost,
     deletePost,
     joinCarpool,
+    closePost,
   } = useCarpool(auth.memberId)
 
   const [showPostModal, setShowPostModal] = useState(false)
@@ -349,7 +350,12 @@ export default function App() {
                       post={p}
                       onOpen={handleOpenDetail}
                       onDelete={deletePost}
+                      onClose={async (id) => {
+                        const ride = await closePost(id)
+                        if (ride) navigate('/rides')
+                      }}
                       showDelete
+                      showClose={p.status === 'OPEN'}
                     />
                   ))
                 )}
