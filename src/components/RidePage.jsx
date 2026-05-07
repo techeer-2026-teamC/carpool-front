@@ -1,7 +1,5 @@
-import React, { useEffect, useRef, useState, useCallback, Component } from 'react'
+import React, { useEffect, useRef, useState, useCallback } from 'react'
 import { Client } from '@stomp/stompjs'
-import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet'
-import L from 'leaflet'
 import {
   getMyRidesAsDriver, getMyRidesAsPassenger, startRide, completeRide,
   getPassengers, boardPassenger, dropOffPassenger,
@@ -9,101 +7,124 @@ import {
 import { getMyReviewForRide } from '../api/reviews'
 import ReviewModal from './ReviewModal'
 
-// react-leaflet v5 + StrictMode 호환: 아이콘을 useEffect 내부가 아닌 지연 초기화
-let iconsInitialized = false
-function ensureIcons() {
-  if (iconsInitialized) return
-  iconsInitialized = true
-  delete L.Icon.Default.prototype._getIconUrl
-  L.Icon.Default.mergeOptions({
-    iconRetinaUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-icon-2x.png',
-    iconUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-icon.png',
-    shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-shadow.png',
+const KAKAO_JS_KEY = import.meta.env.VITE_KAKAO_JS_KEY
+
+let sdkPromise = null
+function loadKakaoSDK() {
+  if (sdkPromise) return sdkPromise
+  sdkPromise = new Promise((resolve, reject) => {
+    if (window.kakao?.maps?.Map) { resolve(); return }
+    const script = document.createElement('script')
+    script.src = `https://dapi.kakao.com/v2/maps/sdk.js?appkey=${KAKAO_JS_KEY}&autoload=false`
+    script.onload = () => window.kakao.maps.load(resolve)
+    script.onerror = () => reject(new Error('카카오맵 SDK 로드 실패'))
+    document.head.appendChild(script)
   })
+  return sdkPromise
 }
 
-function makeDriverIcon() {
-  return L.divIcon({
-    html: '<div style="width:32px;height:32px;background:#27ae60;border-radius:50%;border:3px solid #fff;box-shadow:0 2px 8px rgba(0,0,0,0.4);display:flex;align-items:center;justify-content:center;font-size:14px;">🚗</div>',
-    className: '', iconSize: [32, 32], iconAnchor: [16, 16],
-  })
+function makeDepEl(label) {
+  const d = document.createElement('div')
+  d.innerHTML = `<div style="width:38px;height:38px;border-radius:50% 50% 50% 5px;transform:rotate(-45deg);background:#6b7c3f;border:2.5px solid #fff;box-shadow:0 3px 10px rgba(0,0,0,0.25);display:flex;align-items:center;justify-content:center;">
+    <span style="transform:rotate(45deg);font-size:0.55rem;font-weight:900;color:#fff;text-align:center;line-height:1.1;">${label}</span>
+  </div>`
+  return d
 }
-function makeDepIcon() {
-  return L.divIcon({
-    html: '<div style="width:28px;height:28px;background:#6b7c3f;border-radius:50%;border:3px solid #fff;box-shadow:0 2px 6px rgba(0,0,0,0.3);display:flex;align-items:center;justify-content:center;font-size:12px;">🚦</div>',
-    className: '', iconSize: [28, 28], iconAnchor: [14, 14],
-  })
+function makeDestEl(label) {
+  const d = document.createElement('div')
+  d.innerHTML = `<div style="width:38px;height:38px;border-radius:50% 50% 50% 5px;transform:rotate(-45deg);background:#c0392b;border:2.5px solid #fff;box-shadow:0 3px 10px rgba(0,0,0,0.25);display:flex;align-items:center;justify-content:center;">
+    <span style="transform:rotate(45deg);font-size:0.55rem;font-weight:900;color:#fff;text-align:center;line-height:1.1;">${label}</span>
+  </div>`
+  return d
 }
-function makeDestIcon() {
-  return L.divIcon({
-    html: '<div style="width:28px;height:28px;background:#c0392b;border-radius:50%;border:3px solid #fff;box-shadow:0 2px 6px rgba(0,0,0,0.3);display:flex;align-items:center;justify-content:center;font-size:12px;">🏁</div>',
-    className: '', iconSize: [28, 28], iconAnchor: [14, 14],
-  })
-}
-
-// MapContainer를 감싸는 ErrorBoundary — Leaflet 충돌 시 흰 화면 대신 fallback 표시
-class MapErrorBoundary extends Component {
-  constructor(props) { super(props); this.state = { hasError: false } }
-  static getDerivedStateFromError() { return { hasError: true } }
-  componentDidCatch(err) { console.warn('[MapErrorBoundary]', err) }
-  render() {
-    if (this.state.hasError) {
-      return (
-        <div style={{ height: 260, borderRadius: 12, background: 'var(--surface2)', border: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-          <span style={{ fontSize: '0.82rem', color: 'var(--text-muted)' }}>지도를 불러올 수 없습니다</span>
-        </div>
-      )
-    }
-    return this.props.children
-  }
+function makeDriverEl() {
+  const d = document.createElement('div')
+  d.innerHTML = `<div style="width:40px;height:40px;background:#27ae60;border-radius:50%;border:3px solid #fff;box-shadow:0 2px 10px rgba(0,0,0,0.35);display:flex;align-items:center;justify-content:center;font-size:18px;">🚗</div>`
+  return d
 }
 
-function FlyToDriver({ pos }) {
-  const map = useMap()
+function RideMap({ ride, driverPos }) {
+  const mapRef = useRef(null)
+  const mapInstanceRef = useRef(null)
+  const overlaysRef = useRef([])
+  const [sdkReady, setSdkReady] = useState(false)
+  const [error, setError] = useState(null)
+
   useEffect(() => {
-    if (pos) map.flyTo(pos, map.getZoom(), { animate: true, duration: 1.2 })
-  }, [pos, map])
-  return null
-}
+    loadKakaoSDK().then(() => setSdkReady(true)).catch(e => setError(e.message))
+  }, [])
 
-function RideMap({ ride, driverPos, follow }) {
-  ensureIcons()
-  const center = driverPos
-    || (ride.departureLat && ride.departureLng ? [ride.departureLat, ride.departureLng] : [37.5665, 126.9780])
+  useEffect(() => {
+    if (!sdkReady || !mapRef.current) return
+    const kakao = window.kakao
+    const initLat = ride.departureLat || 37.5665
+    const initLng = ride.departureLng || 126.9780
+    const map = new kakao.maps.Map(mapRef.current, {
+      center: new kakao.maps.LatLng(initLat, initLng),
+      level: 5,
+      maxLevel: 10,
+    })
+    mapInstanceRef.current = map
+    return () => { mapInstanceRef.current = null }
+  }, [sdkReady])
+
+  useEffect(() => {
+    const map = mapInstanceRef.current
+    if (!map || !sdkReady) return
+    const kakao = window.kakao
+
+    overlaysRef.current.forEach(o => o.setMap(null))
+    overlaysRef.current = []
+
+    const bounds = new kakao.maps.LatLngBounds()
+    let pointCount = 0
+
+    if (ride.departureLat && ride.departureLng) {
+      const pos = new kakao.maps.LatLng(ride.departureLat, ride.departureLng)
+      const ov = new kakao.maps.CustomOverlay({ position: pos, content: makeDepEl('출발'), yAnchor: 1.1, zIndex: 3 })
+      ov.setMap(map)
+      overlaysRef.current.push(ov)
+      bounds.extend(pos)
+      pointCount++
+    }
+    if (ride.destinationLat && ride.destinationLng) {
+      const pos = new kakao.maps.LatLng(ride.destinationLat, ride.destinationLng)
+      const ov = new kakao.maps.CustomOverlay({ position: pos, content: makeDestEl('도착'), yAnchor: 1.1, zIndex: 3 })
+      ov.setMap(map)
+      overlaysRef.current.push(ov)
+      bounds.extend(pos)
+      pointCount++
+    }
+    if (driverPos) {
+      const pos = new kakao.maps.LatLng(driverPos[0], driverPos[1])
+      const ov = new kakao.maps.CustomOverlay({ position: pos, content: makeDriverEl(), yAnchor: 0.5, zIndex: 5 })
+      ov.setMap(map)
+      overlaysRef.current.push(ov)
+      bounds.extend(pos)
+      pointCount++
+    }
+
+    if (pointCount >= 2) {
+      map.setBounds(bounds, 60)
+    } else if (driverPos) {
+      map.setCenter(new kakao.maps.LatLng(driverPos[0], driverPos[1]))
+    }
+  }, [sdkReady, ride, driverPos])
 
   return (
-    <MapErrorBoundary>
-      <div style={{ height: 260, borderRadius: 12, overflow: 'hidden', border: '1px solid var(--border)' }}>
-        <MapContainer
-          key={ride.id}
-          center={center}
-          zoom={14}
-          style={{ height: '100%', width: '100%' }}
-          zoomControl={false}
-        >
-          <TileLayer
-            url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-            attribution='&copy; OpenStreetMap contributors'
-          />
-          {driverPos && (
-            <Marker position={driverPos} icon={makeDriverIcon()}>
-              <Popup>드라이버 현재 위치</Popup>
-            </Marker>
-          )}
-          {ride.departureLat && ride.departureLng && (
-            <Marker position={[ride.departureLat, ride.departureLng]} icon={makeDepIcon()}>
-              <Popup>{ride.departureLocation || '출발지'}</Popup>
-            </Marker>
-          )}
-          {ride.destinationLat && ride.destinationLng && (
-            <Marker position={[ride.destinationLat, ride.destinationLng]} icon={makeDestIcon()}>
-              <Popup>{ride.destinationLocation || '목적지'}</Popup>
-            </Marker>
-          )}
-          {follow && driverPos && <FlyToDriver pos={driverPos} />}
-        </MapContainer>
-      </div>
-    </MapErrorBoundary>
+    <div style={{ height: 260, borderRadius: 12, overflow: 'hidden', border: '1px solid var(--border)', background: '#f5f5f0', position: 'relative' }}>
+      <div ref={mapRef} style={{ height: '100%', width: '100%' }} />
+      {!sdkReady && !error && (
+        <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.82rem', color: 'var(--text-muted)' }}>
+          지도 불러오는 중...
+        </div>
+      )}
+      {error && (
+        <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.82rem', color: 'var(--text-muted)' }}>
+          지도를 불러올 수 없습니다
+        </div>
+      )}
+    </div>
   )
 }
 
@@ -273,7 +294,7 @@ function ActiveRidePanel({ ride, isDriver }) {
 
       {err && <div style={styles.errorBox}>{err}</div>}
 
-      <RideMap ride={ride} driverPos={driverPos} follow={!isDriver} />
+      <RideMap ride={ride} driverPos={driverPos} />
 
       {isDriver && (
         <div style={{ marginTop: '1rem' }}>
