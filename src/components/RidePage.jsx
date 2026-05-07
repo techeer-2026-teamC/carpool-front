@@ -459,7 +459,7 @@ export default function RidePage() {
       {activeDriverRide && (
         <ActiveRidePanel ride={activeDriverRide} isDriver />
       )}
-      {activePassengerRide && !activeDriverRide && (
+      {activePassengerRide && (
         <ActiveRidePanel ride={activePassengerRide} isDriver={false} />
       )}
 
