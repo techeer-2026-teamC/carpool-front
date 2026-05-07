@@ -1,8 +1,7 @@
-import React, { useEffect, useRef, useState, useCallback } from 'react'
+import React, { useEffect, useRef, useState, useCallback, Component } from 'react'
 import { Client } from '@stomp/stompjs'
 import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet'
 import L from 'leaflet'
-import 'leaflet/dist/leaflet.css'
 import {
   getMyRidesAsDriver, getMyRidesAsPassenger, startRide, completeRide,
   getPassengers, boardPassenger, dropOffPassenger,
@@ -10,26 +9,54 @@ import {
 import { getMyReviewForRide } from '../api/reviews'
 import ReviewModal from './ReviewModal'
 
-// Leaflet 기본 마커 아이콘 경로 수정
-delete L.Icon.Default.prototype._getIconUrl
-L.Icon.Default.mergeOptions({
-  iconRetinaUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-icon-2x.png',
-  iconUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-icon.png',
-  shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-shadow.png',
-})
+// react-leaflet v5 + StrictMode 호환: 아이콘을 useEffect 내부가 아닌 지연 초기화
+let iconsInitialized = false
+function ensureIcons() {
+  if (iconsInitialized) return
+  iconsInitialized = true
+  delete L.Icon.Default.prototype._getIconUrl
+  L.Icon.Default.mergeOptions({
+    iconRetinaUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-icon-2x.png',
+    iconUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-icon.png',
+    shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-shadow.png',
+  })
+}
 
-const driverIcon = L.divIcon({
-  html: '<div style="width:32px;height:32px;background:#27ae60;border-radius:50%;border:3px solid #fff;box-shadow:0 2px 8px rgba(0,0,0,0.4);display:flex;align-items:center;justify-content:center;font-size:14px;">🚗</div>',
-  className: '', iconSize: [32, 32], iconAnchor: [16, 16],
-})
-const depIcon = L.divIcon({
-  html: '<div style="width:28px;height:28px;background:#6b7c3f;border-radius:50%;border:3px solid #fff;box-shadow:0 2px 6px rgba(0,0,0,0.3);display:flex;align-items:center;justify-content:center;font-size:12px;">🚦</div>',
-  className: '', iconSize: [28, 28], iconAnchor: [14, 14],
-})
-const destIcon = L.divIcon({
-  html: '<div style="width:28px;height:28px;background:#c0392b;border-radius:50%;border:3px solid #fff;box-shadow:0 2px 6px rgba(0,0,0,0.3);display:flex;align-items:center;justify-content:center;font-size:12px;">🏁</div>',
-  className: '', iconSize: [28, 28], iconAnchor: [14, 14],
-})
+function makeDriverIcon() {
+  return L.divIcon({
+    html: '<div style="width:32px;height:32px;background:#27ae60;border-radius:50%;border:3px solid #fff;box-shadow:0 2px 8px rgba(0,0,0,0.4);display:flex;align-items:center;justify-content:center;font-size:14px;">🚗</div>',
+    className: '', iconSize: [32, 32], iconAnchor: [16, 16],
+  })
+}
+function makeDepIcon() {
+  return L.divIcon({
+    html: '<div style="width:28px;height:28px;background:#6b7c3f;border-radius:50%;border:3px solid #fff;box-shadow:0 2px 6px rgba(0,0,0,0.3);display:flex;align-items:center;justify-content:center;font-size:12px;">🚦</div>',
+    className: '', iconSize: [28, 28], iconAnchor: [14, 14],
+  })
+}
+function makeDestIcon() {
+  return L.divIcon({
+    html: '<div style="width:28px;height:28px;background:#c0392b;border-radius:50%;border:3px solid #fff;box-shadow:0 2px 6px rgba(0,0,0,0.3);display:flex;align-items:center;justify-content:center;font-size:12px;">🏁</div>',
+    className: '', iconSize: [28, 28], iconAnchor: [14, 14],
+  })
+}
+
+// MapContainer를 감싸는 ErrorBoundary — Leaflet 충돌 시 흰 화면 대신 fallback 표시
+class MapErrorBoundary extends Component {
+  constructor(props) { super(props); this.state = { hasError: false } }
+  static getDerivedStateFromError() { return { hasError: true } }
+  componentDidCatch(err) { console.warn('[MapErrorBoundary]', err) }
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div style={{ height: 260, borderRadius: 12, background: 'var(--surface2)', border: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <span style={{ fontSize: '0.82rem', color: 'var(--text-muted)' }}>지도를 불러올 수 없습니다</span>
+        </div>
+      )
+    }
+    return this.props.children
+  }
+}
 
 function FlyToDriver({ pos }) {
   const map = useMap()
@@ -40,34 +67,43 @@ function FlyToDriver({ pos }) {
 }
 
 function RideMap({ ride, driverPos, follow }) {
-  const defaultCenter = driverPos
+  ensureIcons()
+  const center = driverPos
     || (ride.departureLat && ride.departureLng ? [ride.departureLat, ride.departureLng] : [37.5665, 126.9780])
 
   return (
-    <div style={{ height: 260, borderRadius: 12, overflow: 'hidden', border: '1px solid var(--border)' }}>
-      <MapContainer center={defaultCenter} zoom={14} style={{ height: '100%', width: '100%' }} zoomControl={false}>
-        <TileLayer
-          url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-          attribution='&copy; OpenStreetMap contributors'
-        />
-        {driverPos && (
-          <Marker position={driverPos} icon={driverIcon}>
-            <Popup>드라이버 현재 위치</Popup>
-          </Marker>
-        )}
-        {ride.departureLat && ride.departureLng && (
-          <Marker position={[ride.departureLat, ride.departureLng]} icon={depIcon}>
-            <Popup>{ride.departureLocation || '출발지'}</Popup>
-          </Marker>
-        )}
-        {ride.destinationLat && ride.destinationLng && (
-          <Marker position={[ride.destinationLat, ride.destinationLng]} icon={destIcon}>
-            <Popup>{ride.destinationLocation || '목적지'}</Popup>
-          </Marker>
-        )}
-        {follow && driverPos && <FlyToDriver pos={driverPos} />}
-      </MapContainer>
-    </div>
+    <MapErrorBoundary>
+      <div style={{ height: 260, borderRadius: 12, overflow: 'hidden', border: '1px solid var(--border)' }}>
+        <MapContainer
+          key={ride.id}
+          center={center}
+          zoom={14}
+          style={{ height: '100%', width: '100%' }}
+          zoomControl={false}
+        >
+          <TileLayer
+            url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+            attribution='&copy; OpenStreetMap contributors'
+          />
+          {driverPos && (
+            <Marker position={driverPos} icon={makeDriverIcon()}>
+              <Popup>드라이버 현재 위치</Popup>
+            </Marker>
+          )}
+          {ride.departureLat && ride.departureLng && (
+            <Marker position={[ride.departureLat, ride.departureLng]} icon={makeDepIcon()}>
+              <Popup>{ride.departureLocation || '출발지'}</Popup>
+            </Marker>
+          )}
+          {ride.destinationLat && ride.destinationLng && (
+            <Marker position={[ride.destinationLat, ride.destinationLng]} icon={makeDestIcon()}>
+              <Popup>{ride.destinationLocation || '목적지'}</Popup>
+            </Marker>
+          )}
+          {follow && driverPos && <FlyToDriver pos={driverPos} />}
+        </MapContainer>
+      </div>
+    </MapErrorBoundary>
   )
 }
 

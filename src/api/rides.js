@@ -29,3 +29,28 @@ export async function completeRide(rideId) {
   const res = await api.post(`/rides/${rideId}/complete`)
   return res.data
 }
+
+export async function getPassengers(rideId) {
+  const res = await api.get(`/rides/${rideId}/passengers`)
+  return res.data
+}
+
+export async function getLocation(rideId) {
+  const res = await api.get(`/rides/${rideId}/location`)
+  return res.data
+}
+
+export async function boardPassenger(rideId, applicationId) {
+  const res = await api.post(`/rides/${rideId}/passengers/${applicationId}/board`)
+  return res.data
+}
+
+export async function dropOffPassenger(rideId, applicationId) {
+  const res = await api.post(`/rides/${rideId}/passengers/${applicationId}/dropoff`)
+  return res.data
+}
+
+export async function updateLocation(rideId, latitude, longitude) {
+  const res = await api.post(`/rides/${rideId}/location`, { latitude, longitude })
+  return res.data
+}
