@@ -21,6 +21,7 @@ CLAUDE.md
 PROJECT_OVERVIEW.md
 
 # editor
+.omc/
 .vscode/
 .idea/
 *.suo
