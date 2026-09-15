@@ -11,11 +11,11 @@ export default defineConfig({
     strictPort: true,
     proxy: isMock ? {} : {
       '/api': {
-        target: 'http://localhost:8080',
+        target: 'http://localhost:18080',
         changeOrigin: true,
       },
       '/ws': {
-        target: 'ws://localhost:8080',
+        target: 'ws://localhost:18080',
         ws: true,
       },
     },
