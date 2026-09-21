@@ -3,6 +3,7 @@ import { api, captureAuthorization } from '../../api/client'
 import { ErrorNotice, Loading } from '../shared/Feedback'
 import Dialog from '../shared/Dialog'
 import DriverForm from './DriverForm'
+import PasswordInput from '../auth/PasswordInput'
 
 export default function AccountPage({ onWithdraw }) {
   const [profile, setProfile] = useState(null)
@@ -53,7 +54,7 @@ export default function AccountPage({ onWithdraw }) {
       </section>
       <DriverForm />
       <section className="section-card"><h2>비밀번호 변경</h2><form className="stack" onSubmit={e => save(e, { currentPassword: password.currentPassword, newPassword: password.newPassword }, '비밀번호가 변경되었습니다.')}>
-        {[['currentPassword', '현재 비밀번호'], ['newPassword', '새 비밀번호'], ['confirm', '새 비밀번호 확인']].map(([key, label]) => <label key={key}>{label}<input type="password" required minLength={8} maxLength={64} autoComplete={key === 'currentPassword' ? 'current-password' : 'new-password'} value={password[key]} onChange={e => setPassword(v => ({ ...v, [key]: e.target.value }))} /></label>)}
+        {[['currentPassword', '현재 비밀번호'], ['newPassword', '새 비밀번호'], ['confirm', '새 비밀번호 확인']].map(([key, label]) => <label key={key}>{label}<PasswordInput newPassword={key !== 'currentPassword'} value={password[key]} onChange={e => setPassword(v => ({ ...v, [key]: e.target.value }))} /></label>)}
         <button className="button secondary" disabled={busy}>비밀번호 변경</button></form></section>
       <section className="section-card"><h2>회원 탈퇴</h2><p className="muted">진행 중인 모집과 확정된 동행을 먼저 정리해 주세요. 탈퇴하면 이 계정으로 서비스를 이용할 수 없습니다.</p><button className="text-button" onClick={() => setConfirm(true)} disabled={busy}>탈퇴하기</button></section>
     </div>}
