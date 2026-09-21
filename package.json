@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite",
     "mock": "VITE_MOCK=true vite",
+    "test": "node --test",
     "build": "vite build",
     "preview": "vite preview"
   },
