@@ -5,6 +5,7 @@ import PlaceMap from '../shared/PlaceMap'
 import { ErrorNotice, Loading } from '../shared/Feedback'
 import { departureLabel, statusLabel, typeLabel, won } from '../shared/format'
 import ApplicationPanel from './ApplicationPanel'
+import MeetingPanel from './MeetingPanel'
 import { useTripAction, useTripResource } from './useTripRequest'
 import { beforeCutoff, sameMember } from './tripContract'
 
@@ -15,13 +16,16 @@ export default function TripDetail({ postId, memberId, revision, onClose, onChan
   const applications = useTripResource(!post || !memberId ? null : host ? `/posts/${postId}/applications` : '/applications/me', `${revision}:${memberId}`)
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [confirmClose, setConfirmClose] = useState(false)
+  const [meetingRevision, setMeetingRevision] = useState(0)
   const [now, setNow] = useState(Date.now())
   useEffect(() => { const timer = setInterval(() => setNow(Date.now()), 15000); return () => clearInterval(timer) }, [])
   const reload = async () => {
     await Promise.all([detail.reload(), applications.reload()])
+    setMeetingRevision(value => value + 1)
     onChanged?.()
   }
   const action = useTripAction(reload)
+  const participating = host || applications.data?.some(item => String(item.postId) === String(postId) && sameMember(item.applicantId, memberId) && item.status === 'ACCEPTED')
   const canChange = beforeCutoff(post, now)
   const markers = post ? [
     { lat: post.departureLat, lng: post.departureLng, name: `출발 · ${post.departureLocation}` },
@@ -50,6 +54,7 @@ export default function TripDetail({ postId, memberId, revision, onClose, onChan
           {confirmDelete && <div className="notice error"><p>모집을 삭제하면 신청도 취소되고, 확정된 참가자에게 알림을 보내요.</p><div className="form-row"><button className="button secondary" disabled={action.busy} onClick={() => setConfirmDelete(false)}>돌아가기</button><button className="button primary" disabled={action.busy} onClick={async () => { if (await action.run(() => api.delete(`/posts/${postId}`), '모집을 삭제했어요.')) onClose() }}>삭제 확인</button></div></div>}
         </section>}
         <ApplicationPanel onLogin={onLogin} post={post} memberId={memberId} host={host} applications={applications.data} loading={applications.loading} error={applications.error} retry={applications.reload} action={action} />
+        {participating && <MeetingPanel post={post} memberId={memberId} revision={`${revision}:${meetingRevision}`} onChanged={reload} />}
       </>}
     </div>
   </Dialog>
