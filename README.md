@@ -1,141 +1,102 @@
 <div align="center">
 
-# 🗺️ 같이타 (Carpool) — Frontend
+# 🌿 모아 — Frontend
 
-**실시간 카풀 매칭 서비스의 프론트엔드**
+**같은 방향으로 가는 사람을 연결하는 출퇴근 카풀·택시 동승 서비스**
 
-카풀 게시글을 지도에서 탐색하고, 운행 중 드라이버·승객 위치를 실시간으로 확인합니다.
-
-<br>
-
-![React](https://img.shields.io/badge/React-18-61DAFB?style=flat-square&logo=react&logoColor=black)
-![Vite](https://img.shields.io/badge/Vite-5-646CFF?style=flat-square&logo=vite&logoColor=white)
-![Kakao Map](https://img.shields.io/badge/Kakao%20Map-SDK-FFCD00?style=flat-square&logo=kakao&logoColor=black)
-![STOMP](https://img.shields.io/badge/STOMP-WebSocket-010101?style=flat-square&logo=socketdotio&logoColor=white)
+![React](https://img.shields.io/badge/React-18-61DAFB?logo=react&logoColor=black)
+![Vite](https://img.shields.io/badge/Vite-6-646CFF?logo=vite&logoColor=white)
+![Node.js](https://img.shields.io/badge/Node.js-22-339933?logo=nodedotjs&logoColor=white)
+![Leaflet](https://img.shields.io/badge/Leaflet-1.9-199900?logo=leaflet&logoColor=white)
 
 </div>
 
----
+## 🧭 이용 흐름
 
-## 📖 목차
+```mermaid
+flowchart LR
+  A[카풀·택시 검색] --> B[참여 신청]
+  B --> C[모집자 승인]
+  C --> D[SSE 알림·참여 확정]
+  D --> E[만남 확인·완료]
+  E --> F[택시 외부 비용 분담 기록]
+```
 
-- [기술 스택](#-기술-스택)
-- [주요 기능](#-주요-기능)
-- [빠른 시작](#-빠른-시작)
-- [프로젝트 구조](#-프로젝트-구조)
-- [실시간 운행 데모](#-실시간-운행-데모)
+| 기능 | 현재 구현 |
+| --- | --- |
+| 모집 검색 | `CARPOOL`·`TAXI`, 출발지·목적지 주변 반경, 날짜, 출발 시각순 더보기 |
+| 모집·신청 | 모집 등록·수정·마감, 참여 신청·취소, 모집자의 승인·거절, 내 동행 조회 |
+| 만남 | 출발 30분 전부터 만남 확인, 출발 시각부터 불참 기록, 상태 확정 후 완료 |
+| 실시간 알림 | Bearer 인증 SSE, 미확인 배지, 읽음 처리, 알림에서 동행 상세 열기 |
+| 만남 위치 | 동의한 참가자만 제한된 시간에 공유, 모집자·참가자별 조회 범위, 만료 위치 제거 |
+| 택시 비용 | 만남 완료 후 실제 탑승자 분담금, 외부 수금 확인·취소 및 변경 이력 |
+| 계정 | 회원가입·로그인, 프로필, 운전자 등록, 로그아웃·탈퇴 |
 
----
+택시 호출·결제·송금 기능은 제공하지 않습니다. 실제 지출과 외부에서 받은 금액을 기록합니다.
 
-## 🛠 기술 스택
+## 🚀 로컬 실행
 
-| 분류 | 기술 |
-|------|------|
-| **Framework** | React 18 + Vite 5 |
-| **Routing** | React Router DOM |
-| **지도** | Kakao Map SDK · Leaflet (react-leaflet) |
-| **실시간** | STOMP over WebSocket (`@stomp/stompjs`) |
-| **스타일** | 인라인 스타일 + CSS 변수 (외부 UI 라이브러리 미사용) |
-
----
-
-## ✨ 주요 기능
-
-- 🔐 **로그인 / 회원가입** — JWT 토큰 기반 인증
-- 📋 **카풀 목록** — 카드뷰 / 지도뷰 토글, 필터(전체·오늘·자리있음·저렴순), 태그·검색
-- 🗺️ **지도 보기** — 카카오맵 위에 게시글 마커 + **실제 도로 경로** 표시 (OSRM)
-- 📝 **게시글 등록** — 출발지/목적지 키워드 검색으로 좌표 자동 입력
-- 🙋 **참여 신청** — 상세 모달에서 카풀 신청 / 마감
-- 🚘 **실시간 운행** — WebSocket으로 드라이버·승객 위치 실시간 지도 표시
-- 👤 **프로필 · 드라이버 등록 · 리뷰**
-
----
-
-## 🚀 빠른 시작
-
-### 1️⃣ 의존성 설치
+Node.js **22**와 `http://localhost:18080`에서 실행 중인 모아 백엔드가 필요합니다.
 
 ```bash
-npm install
+npm ci
+npm test
+npm run build
+npm run dev
 ```
 
-### 2️⃣ 환경변수 설정
+- 화면: **http://localhost:5173**
+- Vite가 `/api`와 `/ws`를 백엔드 **localhost:18080**으로 전달합니다.
+- 새 UI는 Leaflet·OpenStreetMap을 사용하며, 로컬 실행에 필요한 지도 API 키는 없습니다.
+- `.env.example`의 Kakao 키와 `VITE_WS_BASE`는 구형 화면용입니다. `VITE_API_BASE`는 별도 API 주소를 사용할 때만 설정합니다.
 
-`.env.example`을 복사해 `.env`를 만들고 카카오 API 키를 입력합니다.
+> `npm run mock`과 `vite.mocks.js`는 구형 API 기준으로 남겨 둔 도구입니다.
+> 신규 모아 화면의 통합 검증에는 사용할 수 없습니다. 실제 백엔드에 연결해 확인하세요.
 
-```bash
-cp .env.example .env
-```
+## 🧩 코드 구조
 
-```env
-VITE_KAKAO_JS_KEY=발급받은_JavaScript_키
-VITE_KAKAO_REST_API_KEY=발급받은_REST_API_키
-```
+| 경로 | 역할 |
+| --- | --- |
+| `src/main.jsx` · `src/app/App.jsx` | 앱 진입, 화면 전환, 인증 세션과 동행 상세 연결 |
+| `src/api/client.js` | 인증 요청, 토큰 갱신, 계정 변경 시 오래된 응답 차단 |
+| `src/features/discovery/` | 이동 수단·장소·날짜 검색과 모집 카드 |
+| `src/features/recruitment/` | 모집 편집과 내가 모집·신청한 동행 |
+| `src/features/trips/` | 신청 관리, 만남, 위치 공유, 택시 비용 |
+| `src/features/notifications/` | SSE 파서·연결 수명 관리, DB 알림함 보정과 읽음 상태 |
+| `src/features/auth/` · `src/features/account/` | 로그인·회원가입, 프로필·운전자·탈퇴 |
+| `src/features/shared/` · `src/features/shell/` | 지도·장소 선택·대화상자 등 공통 UI와 앱 탐색 |
+| `src/styles/moa.css` | 현재 모아 화면의 반응형 스타일 |
+| `src/legacy/` | 구형 App·CSS 보존본. 현재 진입점에서는 사용하지 않음 |
 
-> 카카오 API 키는 [Kakao Developers](https://developers.kakao.com)에서 발급받습니다.
-> 앱 생성 후 **플랫폼 → Web**에 `http://localhost:5173`을 등록하세요.
+React 18, React Router 7, Vite 6, Leaflet·React Leaflet을 사용합니다.
+알림은 SSE, 만남 위치는 별도 STOMP WebSocket 채널로 처리합니다.
+구형 `components/`, `hooks/`와 일부 API 모듈은 레거시 의존성으로 남아 있습니다.
 
-### 3️⃣ 실행
+위치 공유는 서버에서 발급한 `generation` UUID로 시작·전송·중지를 연결합니다.
+시작 요청 중 화면을 닫아도 늦게 도착한 UUID를 정리하며, 이전 공유의 중지가 새 공유를 끊지 않습니다.
+위치 기능이 사용하는 공유 세션 계약은 [백엔드 PR #164](https://github.com/techeer-2026-teamC/carpool/pull/164)로 백엔드 `main`에 반영되어 있습니다. 실행하는 서버에도 이 계약이 포함되어야 합니다.
 
-```bash
-npm run dev       # 개발 서버 (http://localhost:5173) — 백엔드(8080) 프록시 연결
-npm run mock      # 백엔드 없이 Mock API로 단독 실행
-npm run build     # 프로덕션 빌드
-npm run preview   # 빌드 결과 미리보기
-```
+## 🔔 알림 복구 방식
 
-> `npm run dev`는 `/api`, `/ws` 요청을 `localhost:8080`(백엔드)로 프록시합니다.
-> 백엔드 없이 UI만 보려면 `npm run mock`을 사용하세요.
+서버의 Redis Pub/Sub 이벤트를 각 API의 SSE 연결로 수신합니다.
+연결 중단으로 놓친 알림은 초기 진입·재연결·탭 복귀와 활성 탭의 30초 주기 DB 조회로 보정합니다.
+알림 ID로 중복을 제거하며, 비활성 탭·로그아웃·화면 해제 시 연결을 정리합니다.
+전송 계층이 모든 이벤트의 수신을 보장한다고 가정하지 않습니다.
+
+## ✅ 검증 범위
+
+| 구분 | 확인 결과 |
+| --- | --- |
+| 자동 테스트 | Node 22에서 `node:test` **49개 통과**: 인증 경합·기존 비밀번호 입력, 모집 payload, SSE 파싱·연결 정리, 알림 누락 복구, 위치 상태·공유 세션 수명 |
+| 빌드 | Vite 6 프로덕션 빌드 성공 |
+| 실제 브라우저 | 로그인·신청·모집자 승인 버튼, 정원 0/3→1/3 및 참가자 목록 반영, SSE 수신·읽음, 만남 완료·택시비 분담, 가짜 좌표 공유·중지, 등록·검색·모바일 화면 |
+| CI | GitHub PR·push 및 수동 실행에서 Node 22의 `npm ci`, `npm test`, `npm run build`를 실행. [누적 브랜치의 원격 테스트·빌드 성공](https://github.com/techeer-2026-teamC/carpool-front/actions/runs/35564358936) 확인. 배포 단계 없음 |
+| 부하 테스트 | 이번 작업에서는 실행하지 않음. 테스트 통과를 DAU·처리량 검증으로 해석하지 않음 |
+
+테스트 계정·일부 신청 데이터는 로컬 API로 준비했습니다. 자동 테스트는 브라우저 전체 E2E 테스트가 아니며, 실기기 GPS 이동·권한 팝업은 검증하지 않았습니다.
+49개 자동 테스트와 빌드는 2026-09-21 누적 브랜치에서 로컬과 GitHub Actions로 확인했습니다. 위 브라우저 검증은 2026-09-15 기준이며, 새 공유 세션 계약은 전송 계층 대역을 사용한 회귀 테스트로 검증했습니다.
+이전에 GitHub가 실행을 등록하지 않은 원인은 확정하지 못했습니다. [CI 기반 PR #20](https://github.com/techeer-2026-teamC/carpool-front/pull/20)을 추가하고 기존 브랜치에 전파한 뒤에는 원격 검사가 실행되고 있습니다.
 
 ---
-
-## 📂 프로젝트 구조
-
-```
-Front/
-├── src/
-│   ├── App.jsx              # 최상위 — 라우팅 · 상태 허브
-│   ├── api/                 # 백엔드 API 클라이언트 (도메인별)
-│   ├── components/
-│   │   ├── Nav · Hero · LoginPage
-│   │   ├── SearchSection    # 검색 + 태그 필터
-│   │   ├── CarpoolCard      # 카풀 카드
-│   │   ├── MapView          # 카카오맵 뷰 (마커 + 도로 경로)
-│   │   ├── DetailModal      # 상세 + 참여
-│   │   ├── PostModal        # 게시글 등록
-│   │   ├── RidePage         # 실시간 운행 (WebSocket 지도)
-│   │   ├── ProfilePage · ReviewModal · Toast
-│   ├── hooks/
-│   │   └── useCarpool.js    # 전역 상태 + 액션 커스텀 훅
-│   └── data/tags.js
-├── vite.config.js
-└── vite.mocks.js            # Mock API 플러그인
-```
-
----
-
-## 🎬 실시간 운행 데모
-
-`RidePage`는 STOMP WebSocket으로 위치를 주고받아 지도에 실시간 표시합니다.
-
-| 구분 | 위치 출처 |
-|------|----------|
-| **실제 서비스** | 브라우저 GPS (`navigator.geolocation`) |
-| **테스트(k6)** | 시나리오 하드코딩 좌표 |
-
-테스트 시 브라우저 콘솔에서 아래 실행 후 새로고침하면 GPS 대신 시나리오 좌표를 사용합니다.
-
-```js
-localStorage.setItem('rideTestMode', '1')
-```
-
-> 백엔드 저장소의 `k6/scenarios/07_ride_demo_scenario.js`와 함께 실행하면
-> 드라이버 🚗 와 승객 🧍 마커가 지도 위에서 실시간으로 움직이는 것을 볼 수 있습니다.
-
----
-
-<div align="center">
 
 **Techeer 2026 Team-C**
-
-</div>
