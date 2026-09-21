@@ -74,7 +74,7 @@ React 18, React Router 7, Vite 6, Leaflet·React Leaflet을 사용합니다.
 
 위치 공유는 서버에서 발급한 `generation` UUID로 시작·전송·중지를 연결합니다.
 시작 요청 중 화면을 닫아도 늦게 도착한 UUID를 정리하며, 이전 공유의 중지가 새 공유를 끊지 않습니다.
-위치 기능은 [백엔드 공유 세션 변경 PR #164](https://github.com/techeer-2026-teamC/carpool/pull/164)와 함께 적용해야 합니다.
+위치 기능이 사용하는 공유 세션 계약은 [백엔드 PR #164](https://github.com/techeer-2026-teamC/carpool/pull/164)로 백엔드 `main`에 반영되어 있습니다. 실행하는 서버에도 이 계약이 포함되어야 합니다.
 
 ## 🔔 알림 복구 방식
 
@@ -90,11 +90,12 @@ React 18, React Router 7, Vite 6, Leaflet·React Leaflet을 사용합니다.
 | 자동 테스트 | Node 22에서 `node:test` **49개 통과**: 인증 경합·기존 비밀번호 입력, 모집 payload, SSE 파싱·연결 정리, 알림 누락 복구, 위치 상태·공유 세션 수명 |
 | 빌드 | Vite 6 프로덕션 빌드 성공 |
 | 실제 브라우저 | 로그인·신청·모집자 승인 버튼, 정원 0/3→1/3 및 참가자 목록 반영, SSE 수신·읽음, 만남 완료·택시비 분담, 가짜 좌표 공유·중지, 등록·검색·모바일 화면 |
-| CI 구성 | GitHub PR·push마다 Node 22의 `npm ci`, `npm test`, `npm run build`를 실행하도록 구성. 원격 실행 등록은 별도 확인 필요. 배포 단계 없음 |
+| CI | GitHub PR·push 및 수동 실행에서 Node 22의 `npm ci`, `npm test`, `npm run build`를 실행. [누적 브랜치의 원격 테스트·빌드 성공](https://github.com/techeer-2026-teamC/carpool-front/actions/runs/35564358936) 확인. 배포 단계 없음 |
 | 부하 테스트 | 이번 작업에서는 실행하지 않음. 테스트 통과를 DAU·처리량 검증으로 해석하지 않음 |
 
 테스트 계정·일부 신청 데이터는 로컬 API로 준비했습니다. 자동 테스트는 브라우저 전체 E2E 테스트가 아니며, 실기기 GPS 이동·권한 팝업은 검증하지 않았습니다.
-49개 자동 테스트와 빌드는 2026-09-21 누적 브랜치에서 확인했습니다. 위 브라우저 검증은 2026-09-15 기준이며, 새 공유 세션 계약은 전송 계층 대역을 사용한 회귀 테스트로 검증했습니다.
+49개 자동 테스트와 빌드는 2026-09-21 누적 브랜치에서 로컬과 GitHub Actions로 확인했습니다. 위 브라우저 검증은 2026-09-15 기준이며, 새 공유 세션 계약은 전송 계층 대역을 사용한 회귀 테스트로 검증했습니다.
+이전에 GitHub가 실행을 등록하지 않은 원인은 확정하지 못했습니다. [CI 기반 PR #20](https://github.com/techeer-2026-teamC/carpool-front/pull/20)을 추가하고 기존 브랜치에 전파한 뒤에는 원격 검사가 실행되고 있습니다.
 
 ---
 
