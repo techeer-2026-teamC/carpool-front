@@ -5,6 +5,7 @@ import { departureLabel } from '../shared/format'
 import { useTripAction, useTripResource } from './useTripRequest'
 import { sameMember } from './tripContract'
 import TaxiExpense from './TaxiExpense'
+import MeetingLocation from './MeetingLocation'
 
 const meetingLabel = status => ({ PENDING: '만남 대기', MET: '만남 확인', NO_SHOW: '불참' }[status] || status)
 
@@ -48,6 +49,7 @@ export default function MeetingPanel({ post, memberId, revision, onChanged }) {
         {!canComplete && <p className="muted">출발 30분 전부터, 모든 참가자의 만남·불참 상태를 기록하면 완료할 수 있어요.</p>}
         {confirm && <div className="notice"><p>완료하면 신청 취소·참가자 변경과 위치 공유가 종료돼요. 실제 만남 상태를 확인해 주세요.</p><div className="form-row"><button className="button secondary" disabled={action.busy} onClick={() => setConfirm(false)}>다시 확인</button><button className="button primary" disabled={action.busy || !canComplete} onClick={async () => { if (await action.run(() => api.post(`/posts/${post.id}/meeting/complete`), '만남을 완료했어요.')) setConfirm(false) }}>완료 확정</button></div></div>}
       </>}
+      <MeetingLocation post={post} meeting={view} memberId={memberId} now={now} />
       {post.type === 'TAXI' && (view.completedAt ? <TaxiExpense postId={post.id} memberId={memberId} meeting={view} revision={revision} onChanged={onChanged} /> : <p className="notice">택시 비용은 만남 완료 후 실제 탑승한 사람끼리 나눌 수 있어요.</p>)}
     </>}
   </section>
