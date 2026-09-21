@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react'
 import { api, captureAuthorization } from '../../api/client'
 import Dialog from '../shared/Dialog'
 import { ErrorNotice } from '../shared/Feedback'
+import PasswordInput from './PasswordInput'
 
 export default function AuthDialog({ onClose, onLogin }) {
   const [mode, setMode] = useState('login')
@@ -45,7 +46,7 @@ export default function AuthDialog({ onClose, onLogin }) {
     <form className="stack" onSubmit={submit}>
       <label>이메일<input type="email" name="email" autoComplete="email" required value={form.email} onChange={change} /></label>
       {mode === 'signup' && <label>닉네임<input name="nickname" autoComplete="nickname" required maxLength={30} value={form.nickname} onChange={change} /></label>}
-      <label>비밀번호<input type="password" name="password" autoComplete={mode === 'signup' ? 'new-password' : 'current-password'} required minLength={8} maxLength={64} value={form.password} onChange={change} /></label>
+      <label>비밀번호<PasswordInput name="password" newPassword={mode === 'signup'} value={form.password} onChange={change} /></label>
       <ErrorNotice error={error} />
       <button className="button primary" disabled={busy}>{busy ? '처리 중…' : mode === 'login' ? '로그인하고 함께 가기' : '회원가입하고 시작하기'}</button>
     </form>
