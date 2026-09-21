@@ -56,7 +56,7 @@ export default function MeetingLocation({ post, meeting, memberId, now }) {
       setPoints(current => current.filter(point => !sameMember(point.memberId, memberId)))
     }
   }
-  const visible = visiblePositions(points, scope, now)
+  const visible = visiblePositions(points, scope)
   const markers = visible.map(point => ({ lat: point.latitude, lng: point.longitude,
     name: meeting.participants.find(person => sameMember(person.memberId, point.memberId))?.nickname || '참가자' }))
   return <section className="stack" aria-label="만남 위치 공유"><h3>만날 때만 위치 공유</h3>
