@@ -4,6 +4,7 @@ import PlacePicker from '../shared/PlacePicker'
 import Dialog from '../shared/Dialog'
 import DateField from '../shared/DateField'
 import { ErrorNotice } from '../shared/Feedback'
+import { buildPostPayload } from './postPayload'
 export default function PostEditor({ post, frozen = false, onClose, onSaved }) {
   const [type, setType] = useState(post?.type || 'CARPOOL')
   const [origin, setOrigin] = useState(post ? { name: post.departureLocation, lat: post.departureLat, lng: post.departureLng } : null)
@@ -21,12 +22,7 @@ export default function PostEditor({ post, frozen = false, onClose, onSaved }) {
     if (busy) return
     setBusy(true)
     try {
-      const payload = { type, title: `${origin.name} → ${destination.name}`, departureLocation: origin.name,
-        departureLat: origin.lat, departureLng: origin.lng, destinationLocation: destination.name,
-        destinationLat: destination.lat, destinationLng: destination.lng,
-        departureTime: frozen ? post.departureTime : `${date}T${time}:00`, maxPassengers: Number(capacity),
-        price: price === '' ? null : Number(price), description, autoAccept: false,
-        tagIds: post?.tags?.map(tag => tag.id) || [] }
+      const payload = buildPostPayload({ post, frozen, type, origin, destination, date, time, capacity, price, description })
       const saved = post ? await updatePost(post.id, payload) : await createPost(payload)
       onSaved(saved); onClose()
     } catch (e) { setError(e.message) } finally { setBusy(false) }

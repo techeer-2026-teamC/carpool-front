@@ -1,8 +1,10 @@
-import test from 'node:test'
+import test, { afterEach, beforeEach, mock } from 'node:test'
 import assert from 'node:assert/strict'
 import { visiblePositions, mergePosition } from './locationState.js'
 
 const now = Date.parse('2026-09-15T03:00:00Z')
+beforeEach(() => mock.method(Date, 'now', () => now))
+afterEach(() => mock.restoreAll())
 const scope = { postId: 42, memberId: 7, hostId: 1, participants: [{ memberId: 1 }, { memberId: 7 }, { memberId: 8 }] }
 const point = (memberId, age = 0) => ({ postId: 42, memberId, latitude: 37.5, longitude: 127, recordedAt: new Date(now - age).toISOString() })
 
@@ -35,4 +37,12 @@ test('malformed live messages cannot break the position state update', () => {
   for (const value of [null, undefined, {}, { ...point(7), recordedAt: 'invalid' }]) {
     assert.strictEqual(mergePosition(current, value), current)
   }
+})
+
+test('a caller clock from the previous render cannot hide a newly received position', () => {
+  const received = point(1, -12000)
+  Date.now.mock.mockImplementation(() => now + 12000)
+  assert.deepEqual(visiblePositions([received], scope, now), [received])
+  Date.now.mock.mockImplementation(() => now + 72000)
+  assert.deepEqual(visiblePositions([received], scope, now), [])
 })

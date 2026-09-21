@@ -1,6 +1,7 @@
 import { sameMember } from './tripContract.js'
 
-export function visiblePositions(positions, { postId, memberId, hostId, participants }, now = Date.now()) {
+export function visiblePositions(positions, { postId, memberId, hostId, participants }) {
+  const now = Date.now()
   return (Array.isArray(positions) ? positions : []).filter(point => point && sameMember(point.postId, postId)
     && participants.some(person => sameMember(person.memberId, point.memberId))
     && (sameMember(memberId, hostId) || sameMember(point.memberId, hostId) || sameMember(point.memberId, memberId))
